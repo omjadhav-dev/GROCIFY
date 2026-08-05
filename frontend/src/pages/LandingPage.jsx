@@ -1,92 +1,67 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Leaf, Store, Warehouse, ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const LandingPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  // Already logged in → go to dashboard
   if (user) {
     navigate('/dashboard');
     return null;
   }
 
   return (
-    <div className="auth-page">
-      <div style={{ textAlign: 'center' }}>
-        {/* Brand */}
-        <div style={{ marginBottom: '40px' }}>
-          <div style={{ fontSize: '60px', marginBottom: '10px' }}>🥦</div>
-          <h1 style={{ fontSize: '42px', fontWeight: 800, color: '#2563eb', letterSpacing: '4px' }}>
-            GROCIFY
-          </h1>
-          <p style={{ color: '#64748b', fontSize: '16px', marginTop: '8px' }}>
-            B2B Grocery Platform — Connecting Shopkeepers & Wholesalers
-          </p>
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-leaf-50 via-white to-white px-4 py-16">
+      <div className="w-full max-w-3xl text-center">
+        <div className="mb-10">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-leaf-600 text-white shadow-card">
+            <Leaf size={30} />
+          </div>
+          <h1 className="font-display text-5xl font-semibold tracking-tight text-leaf-800">GROCIFY</h1>
+          <p className="mt-3 text-slate-500">B2B Grocery Platform — Connecting Shopkeepers &amp; Wholesalers</p>
         </div>
 
-        {/* Portal selection cards */}
-        <div style={{ display: 'flex', gap: '24px', justifyContent: 'center', flexWrap: 'wrap' }}>
-          {/* Shopkeeper Portal */}
-          <div
-            className="card"
-            style={{
-              width: '280px',
-              cursor: 'pointer',
-              border: '2px solid transparent',
-              transition: 'all 0.2s',
-            }}
+        <div className="flex flex-wrap justify-center gap-6">
+          <button
             onClick={() => navigate('/login/shopkeeper')}
-            onMouseEnter={(e) => (e.currentTarget.style.border = '2px solid #2563eb')}
-            onMouseLeave={(e) => (e.currentTarget.style.border = '2px solid transparent')}
+            className="group card w-72 text-left transition hover:border-leaf-400 hover:shadow-lg"
           >
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏪</div>
-            <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '8px' }}>
-              Shopkeeper Portal
-            </h2>
-            <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '20px' }}>
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-leaf-50 text-leaf-600">
+              <Store size={24} />
+            </div>
+            <h2 className="mb-1.5 text-lg font-semibold text-slate-900">Shopkeeper Portal</h2>
+            <p className="mb-5 text-sm text-slate-500">
               Browse products from wholesalers, place bulk orders, and track deliveries.
             </p>
-            <button className="btn btn-primary" style={{ width: '100%' }}>
-              Login as Shopkeeper →
-            </button>
-          </div>
+            <span className="btn-primary w-full">
+              Login as Shopkeeper <ArrowRight size={16} />
+            </span>
+          </button>
 
-          {/* Wholesaler Portal */}
-          <div
-            className="card"
-            style={{
-              width: '280px',
-              cursor: 'pointer',
-              border: '2px solid transparent',
-              transition: 'all 0.2s',
-            }}
+          <button
             onClick={() => navigate('/login/wholesaler')}
-            onMouseEnter={(e) => (e.currentTarget.style.border = '2px solid #2563eb')}
-            onMouseLeave={(e) => (e.currentTarget.style.border = '2px solid transparent')}
+            className="group card w-72 text-left transition hover:border-harvest-500 hover:shadow-lg"
           >
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏭</div>
-            <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '8px' }}>
-              Wholesaler Portal
-            </h2>
-            <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '20px' }}>
-              List your products, manage inventory, fulfill orders from shopkeepers.
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-harvest-50 text-harvest-500">
+              <Warehouse size={24} />
+            </div>
+            <h2 className="mb-1.5 text-lg font-semibold text-slate-900">Wholesaler Portal</h2>
+            <p className="mb-5 text-sm text-slate-500">
+              List your products, manage inventory, and fulfill orders from shopkeepers.
             </p>
-            <button className="btn btn-primary" style={{ width: '100%' }}>
-              Login as Wholesaler →
-            </button>
-          </div>
+            <span className="btn-primary w-full">
+              Login as Wholesaler <ArrowRight size={16} />
+            </span>
+          </button>
         </div>
 
-        <p style={{ marginTop: '28px', color: '#64748b', fontSize: '14px' }}>
+        <p className="mt-8 text-sm text-slate-500">
           New here?{' '}
-          <span
-            style={{ color: '#2563eb', cursor: 'pointer', fontWeight: 600 }}
-            onClick={() => navigate('/register')}
-          >
+          <button onClick={() => navigate('/register')} className="font-semibold text-leaf-700 hover:underline">
             Create an account
-          </span>
+          </button>
         </p>
       </div>
     </div>
