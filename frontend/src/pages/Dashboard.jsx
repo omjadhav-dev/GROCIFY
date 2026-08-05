@@ -1,8 +1,17 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Package, Clock, CheckCircle2, Wallet, ShoppingBag, Inbox, Truck, PackageOpen, ShoppingCart, MessageCircle, PlusCircle, ClipboardList } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
 import API from '../api';
+
+const statusClass = {
+  Pending: 'bg-amber-50 text-amber-600',
+  Accepted: 'bg-sky-50 text-sky-600',
+  Rejected: 'bg-red-50 text-red-600',
+  Dispatched: 'bg-indigo-50 text-indigo-600',
+  Delivered: 'bg-leaf-50 text-leaf-700',
+};
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -29,118 +38,97 @@ const Dashboard = () => {
     fetchData();
   }, [user.type]);
 
-  // Count orders by status
   const countByStatus = (status) => orders.filter((o) => o.status === status).length;
   const totalRevenue = orders
     .filter((o) => o.status === 'Delivered')
-    .reduce((sum, o) => sum + o.totalAmount, 0);
+    .reduce((sum, o) => sum + Number(o.totalAmount), 0);
 
   const shopkeeperStats = [
-    { label: 'Total Orders', value: orders.length, icon: '📦', color: '#2563eb' },
-    { label: 'Pending Orders', value: countByStatus('Pending'), icon: '⏳', color: '#f59e0b' },
-    { label: 'Delivered', value: countByStatus('Delivered'), icon: '✅', color: '#16a34a' },
-    { label: 'Amount Spent', value: `₹${totalRevenue.toFixed(0)}`, icon: '💰', color: '#7c3aed' },
+    { label: 'Total Orders', value: orders.length, icon: Package, color: 'text-harvest-500 bg-harvest-50' },
+    { label: 'Pending Orders', value: countByStatus('Pending'), icon: Clock, color: 'text-amber-600 bg-amber-50' },
+    { label: 'Delivered', value: countByStatus('Delivered'), icon: CheckCircle2, color: 'text-leaf-700 bg-leaf-50' },
+    { label: 'Amount Spent', value: `₹${totalRevenue.toFixed(0)}`, icon: Wallet, color: 'text-violet-600 bg-violet-50' },
   ];
 
   const wholesalerStats = [
-    { label: 'My Products', value: products.length, icon: '🛍️', color: '#2563eb' },
-    { label: 'New Orders', value: countByStatus('Pending'), icon: '📬', color: '#f59e0b' },
-    { label: 'Orders Dispatched', value: countByStatus('Dispatched'), icon: '🚚', color: '#0891b2' },
-    { label: 'Revenue Earned', value: `₹${totalRevenue.toFixed(0)}`, icon: '💰', color: '#16a34a' },
+    { label: 'My Products', value: products.length, icon: ShoppingBag, color: 'text-harvest-500 bg-harvest-50' },
+    { label: 'New Orders', value: countByStatus('Pending'), icon: Inbox, color: 'text-amber-600 bg-amber-50' },
+    { label: 'Orders Dispatched', value: countByStatus('Dispatched'), icon: Truck, color: 'text-cyan-600 bg-cyan-50' },
+    { label: 'Revenue Earned', value: `₹${totalRevenue.toFixed(0)}`, icon: Wallet, color: 'text-leaf-700 bg-leaf-50' },
   ];
 
   const stats = user.type === 'wholesaler' ? wholesalerStats : shopkeeperStats;
-
-  // Recent 5 orders
   const recentOrders = orders.slice(0, 5);
 
-  const statusClass = {
-    Pending: 'status-pending',
-    Accepted: 'status-accepted',
-    Rejected: 'status-rejected',
-    Dispatched: 'status-dispatched',
-    Delivered: 'status-delivered',
-  };
-
   return (
-    <div className="dashboard-layout">
+    <div className="flex min-h-screen bg-slate-50">
       <Sidebar />
-      <div className="main-content">
-        {/* Welcome */}
-        <div style={{ marginBottom: '28px' }}>
-          <h1 className="page-title">
-            👋 Welcome back, {user.name}!
-          </h1>
-          <p style={{ color: '#64748b', fontSize: '14px' }}>
+      <div className="flex-1 p-8">
+        <div className="mb-7">
+          <h1 className="font-display text-2xl font-semibold text-slate-900">Welcome back, {user.name}!</h1>
+          <p className="text-sm text-slate-500">
             {user.type === 'wholesaler'
               ? 'Here is an overview of your business activity.'
               : 'Here is a summary of your orders and activity.'}
           </p>
         </div>
 
-        {/* Stats Cards */}
         {loading ? (
-          <p style={{ color: '#94a3b8' }}>Loading stats...</p>
+          <p className="text-slate-400">Loading stats...</p>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '20px', marginBottom: '32px' }}>
-            {stats.map((stat) => (
-              <div className="card" key={stat.label} style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <div style={{
-                  width: '52px', height: '52px', borderRadius: '12px',
-                  background: stat.color + '20', display: 'flex',
-                  alignItems: 'center', justifyContent: 'center', fontSize: '24px', flexShrink: 0
-                }}>
-                  {stat.icon}
+          <div className="mb-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {stats.map((stat) => {
+              const Icon = stat.icon;
+              return (
+                <div className="card flex items-center gap-4" key={stat.label}>
+                  <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${stat.color}`}>
+                    <Icon size={22} />
+                  </div>
+                  <div>
+                    <div className="text-xl font-bold text-slate-900">{stat.value}</div>
+                    <div className="text-xs text-slate-500">{stat.label}</div>
+                  </div>
                 </div>
-                <div>
-                  <div style={{ fontSize: '22px', fontWeight: 700, color: stat.color }}>{stat.value}</div>
-                  <div style={{ fontSize: '13px', color: '#64748b' }}>{stat.label}</div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
-        {/* Recent Orders */}
         <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h2 style={{ fontSize: '16px', fontWeight: 700 }}>Recent Orders</h2>
-            <button className="btn btn-outline" style={{ fontSize: '13px', padding: '6px 14px' }} onClick={() => navigate('/orders')}>
+          <div className="mb-5 flex items-center justify-between">
+            <h2 className="text-base font-semibold text-slate-900">Recent Orders</h2>
+            <button className="btn-outline px-3.5 py-1.5 text-xs" onClick={() => navigate('/orders')}>
               View All
             </button>
           </div>
 
           {recentOrders.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
-              <div style={{ fontSize: '40px', marginBottom: '10px' }}>📭</div>
+            <div className="py-12 text-center text-slate-400">
+              <PackageOpen className="mx-auto mb-2" size={36} />
               <p>No orders yet</p>
             </div>
           ) : (
-            <div className="table-wrapper">
-              <table>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
                 <thead>
-                  <tr>
-                    <th>Order ID</th>
-                    <th>{user.type === 'wholesaler' ? 'Shopkeeper' : 'Wholesaler'}</th>
-                    <th>Amount</th>
-                    <th>Status</th>
-                    <th>Date</th>
+                  <tr className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
+                    <th className="pb-3 font-medium">Order ID</th>
+                    <th className="pb-3 font-medium">{user.type === 'wholesaler' ? 'Shopkeeper' : 'Wholesaler'}</th>
+                    <th className="pb-3 font-medium">Amount</th>
+                    <th className="pb-3 font-medium">Status</th>
+                    <th className="pb-3 font-medium">Date</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-slate-50">
                   {recentOrders.map((order) => (
-                    <tr key={order._id} style={{ cursor: 'pointer' }} onClick={() => navigate('/orders')}>
-                      <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>
-                        #{order._id.slice(-6).toUpperCase()}
+                    <tr key={order.id} className="cursor-pointer hover:bg-slate-50" onClick={() => navigate('/orders')}>
+                      <td className="py-3 font-mono text-xs text-slate-500">#{String(order.id).padStart(6, '0')}</td>
+                      <td className="py-3">{user.type === 'wholesaler' ? order.shopkeeperName : order.wholesalerName}</td>
+                      <td className="py-3 font-semibold">₹{order.totalAmount}</td>
+                      <td className="py-3">
+                        <span className={`status-badge ${statusClass[order.status]}`}>{order.status}</span>
                       </td>
-                      <td>{user.type === 'wholesaler' ? order.shopkeeperName : order.wholesalerName}</td>
-                      <td style={{ fontWeight: 600 }}>₹{order.totalAmount}</td>
-                      <td>
-                        <span className={`status-badge ${statusClass[order.status]}`}>
-                          {order.status}
-                        </span>
-                      </td>
-                      <td style={{ color: '#64748b', fontSize: '13px' }}>
+                      <td className="py-3 text-xs text-slate-500">
                         {new Date(order.createdAt).toLocaleDateString('en-IN')}
                       </td>
                     </tr>
@@ -151,24 +139,23 @@ const Dashboard = () => {
           )}
         </div>
 
-        {/* Quick actions */}
-        <div style={{ display: 'flex', gap: '12px', marginTop: '20px', flexWrap: 'wrap' }}>
+        <div className="mt-5 flex flex-wrap gap-3">
           {user.type === 'shopkeeper' ? (
             <>
-              <button className="btn btn-primary" onClick={() => navigate('/products')}>
-                🛒 Browse Products
+              <button className="btn-primary" onClick={() => navigate('/products')}>
+                <ShoppingCart size={16} /> Browse Products
               </button>
-              <button className="btn btn-outline" onClick={() => navigate('/chat')}>
-                💬 Message Wholesaler
+              <button className="btn-outline" onClick={() => navigate('/chat')}>
+                <MessageCircle size={16} /> Message Wholesaler
               </button>
             </>
           ) : (
             <>
-              <button className="btn btn-primary" onClick={() => navigate('/products')}>
-                ➕ Add Product
+              <button className="btn-primary" onClick={() => navigate('/products')}>
+                <PlusCircle size={16} /> Add Product
               </button>
-              <button className="btn btn-outline" onClick={() => navigate('/orders')}>
-                📋 Manage Orders
+              <button className="btn-outline" onClick={() => navigate('/orders')}>
+                <ClipboardList size={16} /> Manage Orders
               </button>
             </>
           )}
