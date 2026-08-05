@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Mail, Phone, MapPin, Save, KeyRound } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 import { useAuth } from '../context/AuthContext';
 import API from '../api';
@@ -34,9 +35,9 @@ const ProfilePage = () => {
     try {
       const res = await API.put('/profile', profileForm);
       updateUser(res.data);
-      setProfileMsg({ text: '✅ Profile updated successfully!', type: 'success' });
+      setProfileMsg({ text: 'Profile updated successfully!', type: 'success' });
     } catch (err) {
-      setProfileMsg({ text: '⚠️ ' + (err.response?.data?.message || 'Update failed'), type: 'error' });
+      setProfileMsg({ text: err.response?.data?.message || 'Update failed', type: 'error' });
     } finally {
       setProfileLoading(false);
     }
@@ -47,10 +48,10 @@ const ProfilePage = () => {
     setPasswordMsg({ text: '', type: '' });
 
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      return setPasswordMsg({ text: '⚠️ New passwords do not match', type: 'error' });
+      return setPasswordMsg({ text: 'New passwords do not match', type: 'error' });
     }
     if (passwordForm.newPassword.length < 6) {
-      return setPasswordMsg({ text: '⚠️ Password must be at least 6 characters', type: 'error' });
+      return setPasswordMsg({ text: 'Password must be at least 6 characters', type: 'error' });
     }
 
     setPasswordLoading(true);
@@ -59,10 +60,10 @@ const ProfilePage = () => {
         currentPassword: passwordForm.currentPassword,
         newPassword: passwordForm.newPassword,
       });
-      setPasswordMsg({ text: '✅ Password changed successfully!', type: 'success' });
+      setPasswordMsg({ text: 'Password changed successfully!', type: 'success' });
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (err) {
-      setPasswordMsg({ text: '⚠️ ' + (err.response?.data?.message || 'Failed to change password'), type: 'error' });
+      setPasswordMsg({ text: err.response?.data?.message || 'Failed to change password', type: 'error' });
     } finally {
       setPasswordLoading(false);
     }
@@ -70,102 +71,89 @@ const ProfilePage = () => {
 
   const avatarLetter = user?.name?.charAt(0).toUpperCase() || 'G';
 
-  const msgStyle = (type) => ({
-    padding: '10px 14px',
-    borderRadius: '8px',
-    fontSize: '13px',
-    marginBottom: '16px',
-    background: type === 'success' ? '#dcfce7' : '#fef2f2',
-    color: type === 'success' ? '#15803d' : '#ef4444',
-  });
+  const msgClass = (type) =>
+    `mb-4 rounded-lg px-3.5 py-2.5 text-sm ${type === 'success' ? 'bg-leaf-50 text-leaf-700' : 'bg-red-50 text-red-600'}`;
 
   return (
-    <div className="dashboard-layout">
+    <div className="flex min-h-screen bg-slate-50">
       <Sidebar />
-      <div className="main-content">
-        <h1 className="page-title">👤 My Profile</h1>
+      <div className="flex-1 p-8">
+        <h1 className="mb-6 font-display text-2xl font-semibold text-slate-900">My Profile</h1>
 
-        <div className="profile-grid">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[300px_1fr]">
           {/* Left: Avatar Card */}
           <div>
-            <div className="card profile-avatar-card">
-              <div className="profile-avatar">{avatarLetter}</div>
-              <div className="profile-name">{user?.name}</div>
-              <div className="profile-type">{user?.type}</div>
-              <div style={{ marginTop: '20px', textAlign: 'left', width: '100%' }}>
-                <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '8px', display: 'flex', gap: '8px' }}>
-                  <span>📧</span><span>{user?.email}</span>
-                </div>
-                <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '8px', display: 'flex', gap: '8px' }}>
-                  <span>📱</span><span>{user?.mobile}</span>
-                </div>
-                <div style={{ fontSize: '13px', color: '#64748b', display: 'flex', gap: '8px' }}>
-                  <span>📍</span><span>{user?.address}</span>
-                </div>
+            <div className="card flex flex-col items-center text-center">
+              <div className="mb-3 flex h-20 w-20 items-center justify-center rounded-full bg-leaf-600 text-2xl font-bold text-white">
+                {avatarLetter}
+              </div>
+              <div className="text-lg font-semibold text-slate-900">{user?.name}</div>
+              <div className="mb-4 text-xs capitalize text-slate-400">{user?.type}</div>
+              <div className="w-full space-y-2.5 text-left text-sm text-slate-500">
+                <div className="flex items-center gap-2"><Mail size={14} /><span className="truncate">{user?.email}</span></div>
+                <div className="flex items-center gap-2"><Phone size={14} /><span>{user?.mobile}</span></div>
+                <div className="flex items-center gap-2"><MapPin size={14} /><span>{user?.address}</span></div>
               </div>
             </div>
 
-            {/* Account info card */}
-            <div className="card" style={{ marginTop: '20px' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '12px' }}>Account Info</h3>
-              <div style={{ fontSize: '13px', color: '#64748b', lineHeight: '2' }}>
-                <div><strong>Account Type:</strong> {user?.type}</div>
-                <div><strong>Email:</strong> {user?.email}</div>
-                <div><strong>Member since:</strong> {new Date().getFullYear()}</div>
+            <div className="card mt-5">
+              <h3 className="mb-3 text-sm font-semibold text-slate-900">Account Info</h3>
+              <div className="space-y-1.5 text-sm text-slate-500">
+                <div><span className="font-medium text-slate-700">Account Type:</span> <span className="capitalize">{user?.type}</span></div>
+                <div><span className="font-medium text-slate-700">Email:</span> {user?.email}</div>
+                <div><span className="font-medium text-slate-700">Member since:</span> {new Date().getFullYear()}</div>
               </div>
             </div>
           </div>
 
           {/* Right: Edit Forms */}
-          <div>
-            {/* Edit Profile */}
-            <div className="card" style={{ marginBottom: '20px' }}>
-              <h2 style={{ fontSize: '17px', fontWeight: 700, marginBottom: '20px' }}>Edit Profile</h2>
-              {profileMsg.text && <div style={msgStyle(profileMsg.type)}>{profileMsg.text}</div>}
-              <form onSubmit={saveProfile}>
-                <div className="form-group">
-                  <label>Full Name / Business Name</label>
-                  <input name="name" value={profileForm.name} onChange={handleProfileChange} required />
+          <div className="space-y-5">
+            <div className="card">
+              <h2 className="mb-4 text-base font-semibold text-slate-900">Edit Profile</h2>
+              {profileMsg.text && <div className={msgClass(profileMsg.type)}>{profileMsg.text}</div>}
+              <form onSubmit={saveProfile} className="space-y-4">
+                <div>
+                  <label className="form-label">Full Name / Business Name</label>
+                  <input className="form-input" name="name" value={profileForm.name} onChange={handleProfileChange} required />
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div className="form-group">
-                    <label>Mobile Number</label>
-                    <input name="mobile" value={profileForm.mobile} onChange={handleProfileChange} required />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="form-label">Mobile Number</label>
+                    <input className="form-input" name="mobile" value={profileForm.mobile} onChange={handleProfileChange} required />
                   </div>
-                  <div className="form-group">
-                    <label>Business Name (optional)</label>
-                    <input name="businessName" value={profileForm.businessName} onChange={handleProfileChange} placeholder="e.g. Om Traders" />
+                  <div>
+                    <label className="form-label">Business Name (optional)</label>
+                    <input className="form-input" name="businessName" value={profileForm.businessName} onChange={handleProfileChange} placeholder="e.g. Om Traders" />
                   </div>
                 </div>
-                <div className="form-group">
-                  <label>Business Address</label>
-                  <input name="address" value={profileForm.address} onChange={handleProfileChange} required />
+                <div>
+                  <label className="form-label">Business Address</label>
+                  <input className="form-input" name="address" value={profileForm.address} onChange={handleProfileChange} required />
                 </div>
-                <button className="btn btn-primary" type="submit" disabled={profileLoading}>
-                  {profileLoading ? 'Saving...' : '💾 Save Changes'}
+                <button className="btn-primary" type="submit" disabled={profileLoading}>
+                  <Save size={15} /> {profileLoading ? 'Saving...' : 'Save Changes'}
                 </button>
               </form>
             </div>
 
-            {/* Change Password */}
             <div className="card">
-              <h2 style={{ fontSize: '17px', fontWeight: 700, marginBottom: '20px' }}>🔒 Change Password</h2>
-              {passwordMsg.text && <div style={msgStyle(passwordMsg.type)}>{passwordMsg.text}</div>}
-              <form onSubmit={changePassword}>
-                <div className="form-group">
-                  <label>Current Password</label>
-                  <input type="password" name="currentPassword" value={passwordForm.currentPassword} onChange={handlePasswordChange} placeholder="Enter current password" required />
+              <h2 className="mb-4 text-base font-semibold text-slate-900">Change Password</h2>
+              {passwordMsg.text && <div className={msgClass(passwordMsg.type)}>{passwordMsg.text}</div>}
+              <form onSubmit={changePassword} className="space-y-4">
+                <div>
+                  <label className="form-label">Current Password</label>
+                  <input className="form-input" type="password" name="currentPassword" value={passwordForm.currentPassword} onChange={handlePasswordChange} placeholder="Enter current password" required />
                 </div>
-                <div className="form-group">
-                  <label>New Password</label>
-                  <input type="password" name="newPassword" value={passwordForm.newPassword} onChange={handlePasswordChange} placeholder="Min 6 characters" required />
+                <div>
+                  <label className="form-label">New Password</label>
+                  <input className="form-input" type="password" name="newPassword" value={passwordForm.newPassword} onChange={handlePasswordChange} placeholder="Min 6 characters" required />
                 </div>
-                <div className="form-group">
-                  <label>Confirm New Password</label>
-                  <input type="password" name="confirmPassword" value={passwordForm.confirmPassword} onChange={handlePasswordChange} placeholder="Repeat new password" required />
+                <div>
+                  <label className="form-label">Confirm New Password</label>
+                  <input className="form-input" type="password" name="confirmPassword" value={passwordForm.confirmPassword} onChange={handlePasswordChange} placeholder="Repeat new password" required />
                 </div>
-                <button className="btn btn-primary" type="submit" disabled={passwordLoading}>
-                  {passwordLoading ? 'Updating...' : '🔑 Change Password'}
+                <button className="btn-primary" type="submit" disabled={passwordLoading}>
+                  <KeyRound size={15} /> {passwordLoading ? 'Updating...' : 'Change Password'}
                 </button>
               </form>
             </div>
