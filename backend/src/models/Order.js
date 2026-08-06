@@ -1,67 +1,24 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const sequelize = require('../config/db');
 
-const orderItemSchema = new mongoose.Schema({
-  product: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Product',
-    required: true,
-  },
-  productName: String,
-  quantity: {
-    type: Number,
-    required: true,
-    min: 1,
-  },
-  price: {
-    type: Number,
-    required: true,
-  },
-  unit: String,
-});
-
-const orderSchema = new mongoose.Schema(
+const Order = sequelize.define(
+  'Order',
   {
-    // Shopkeeper who placed the order
-    shopkeeper: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
-    },
-    shopkeeperName: String,
-
-    // Wholesaler who will fulfill
-    wholesaler: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
-    },
-    wholesalerName: String,
-
-    items: [orderItemSchema],
-
-    totalAmount: {
-      type: Number,
-      required: true,
-    },
-
-    // Order status flow: Pending -> Accepted -> Dispatched -> Delivered  (or Rejected)
+    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    shopkeeperId: { type: DataTypes.INTEGER, allowNull: false },
+    shopkeeperName: { type: DataTypes.STRING },
+    wholesalerId: { type: DataTypes.INTEGER, allowNull: false },
+    wholesalerName: { type: DataTypes.STRING },
+    totalAmount: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+    // Order status flow: Pending -> Accepted -> Dispatched -> Delivered (or Rejected)
     status: {
-      type: String,
-      enum: ['Pending', 'Accepted', 'Rejected', 'Dispatched', 'Delivered'],
-      default: 'Pending',
+      type: DataTypes.ENUM('Pending', 'Accepted', 'Rejected', 'Dispatched', 'Delivered'),
+      defaultValue: 'Pending',
     },
-
-    deliveryAddress: {
-      type: String,
-      required: true,
-    },
-
-    note: {
-      type: String,
-      default: '',
-    },
+    deliveryAddress: { type: DataTypes.STRING, allowNull: false },
+    note: { type: DataTypes.STRING, defaultValue: '' },
   },
-  { timestamps: true }
+  { tableName: 'orders' }
 );
 
-module.exports = mongoose.model('Order', orderSchema);
+module.exports = Order;
