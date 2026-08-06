@@ -1,5 +1,5 @@
-node_modules/
+node_modules
 .env
-build/
-.DS_Store
-*.log
+backend/src/uploads/*
+!backend/src/uploads/.gitkeep
+frontend/dist
