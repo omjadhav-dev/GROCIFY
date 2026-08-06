@@ -1,63 +1,46 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
 const bcrypt = require('bcryptjs');
+const sequelize = require('../config/db');
 
-const userSchema = new mongoose.Schema(
+const User = sequelize.define(
+  'User',
   {
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-    },
+    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    name: { type: DataTypes.STRING, allowNull: false },
     email: {
-      type: String,
-      required: true,
+      type: DataTypes.STRING,
+      allowNull: false,
       unique: true,
-      lowercase: true,
-      trim: true,
+      validate: { isEmail: true },
+      set(value) {
+        this.setDataValue('email', value.toLowerCase().trim());
+      },
     },
-    password: {
-      type: String,
-      required: true,
-      minlength: 6,
-    },
-    mobile: {
-      type: String,
-      required: true,
-    },
-    address: {
-      type: String,
-      required: true,
-    },
+    password: { type: DataTypes.STRING, allowNull: false, validate: { len: [6, 200] } },
+    mobile: { type: DataTypes.STRING, allowNull: false },
+    address: { type: DataTypes.STRING, allowNull: false },
     // 'shopkeeper' or 'wholesaler'
-    type: {
-      type: String,
-      enum: ['shopkeeper', 'wholesaler'],
-      required: true,
-    },
-    profileImage: {
-      type: String,
-      default: '',
-    },
-    businessName: {
-      type: String,
-      default: '',
-    },
+    type: { type: DataTypes.ENUM('shopkeeper', 'wholesaler'), allowNull: false },
+    profileImage: { type: DataTypes.STRING, defaultValue: '' },
+    businessName: { type: DataTypes.STRING, defaultValue: '' },
   },
-  { timestamps: true }
+  {
+    tableName: 'users',
+    hooks: {
+      // Hash password whenever it's created or changed
+      beforeSave: async (user) => {
+        if (user.changed('password')) {
+          const salt = await bcrypt.genSalt(10);
+          user.password = await bcrypt.hash(user.password, salt);
+        }
+      },
+    },
+  }
 );
 
-// Hash password before saving
-userSchema.pre('save', async function (next) {
-  // Only hash if password was changed or is new
-  if (!this.isModified('password')) return next();
-  const salt = await bcrypt.genSalt(10);
-  this.password = await bcrypt.hash(this.password, salt);
-  next();
-});
-
-// Method to compare passwords during login
-userSchema.methods.matchPassword = async function (enteredPassword) {
-  return await bcrypt.compare(enteredPassword, this.password);
+// Instance method to compare passwords during login
+User.prototype.matchPassword = async function (enteredPassword) {
+  return bcrypt.compare(enteredPassword, this.password);
 };
 
-module.exports = mongoose.model('User', userSchema);
+module.exports = User;

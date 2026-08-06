@@ -1,51 +1,21 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const sequelize = require('../config/db');
 
-const productSchema = new mongoose.Schema(
+const Product = sequelize.define(
+  'Product',
   {
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    description: {
-      type: String,
-      default: '',
-    },
-    price: {
-      type: Number,
-      required: true,
-      min: 0,
-    },
-    stock: {
-      type: Number,
-      required: true,
-      min: 0,
-      default: 0,
-    },
-    unit: {
-      type: String,
-      // e.g. kg, litre, dozen, piece
-      default: 'piece',
-    },
-    category: {
-      type: String,
-      default: 'General',
-    },
-    image: {
-      type: String,
-      default: '',
-    },
-    // The wholesaler who listed this product
-    wholesaler: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
-    },
-    wholesalerName: {
-      type: String,
-    },
+    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    name: { type: DataTypes.STRING, allowNull: false },
+    description: { type: DataTypes.TEXT, defaultValue: '' },
+    price: { type: DataTypes.DECIMAL(10, 2), allowNull: false, validate: { min: 0 } },
+    stock: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, validate: { min: 0 } },
+    unit: { type: DataTypes.STRING, defaultValue: 'piece' },
+    category: { type: DataTypes.STRING, defaultValue: 'General' },
+    image: { type: DataTypes.STRING, defaultValue: '' },
+    wholesalerId: { type: DataTypes.INTEGER, allowNull: false },
+    wholesalerName: { type: DataTypes.STRING },
   },
-  { timestamps: true }
+  { tableName: 'products' }
 );
 
-module.exports = mongoose.model('Product', productSchema);
+module.exports = Product;
