@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
+import { Search, MessageCircle, Send } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 import { useAuth } from '../context/AuthContext';
 import API from '../api';
 
-// Single socket connection for the app
+// Backend Socket.IO origin — defaults to the dev backend port
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+
 let socket;
 
 const ChatPage = () => {
@@ -18,40 +21,30 @@ const ChatPage = () => {
   const [showBrowse, setShowBrowse] = useState(false);
   const messagesEndRef = useRef(null);
 
-  // Scroll to bottom when messages change
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   useEffect(() => { scrollToBottom(); }, [messages]);
 
-  // Setup socket connection
   useEffect(() => {
-    socket = io('http://localhost:5000');
-    socket.emit('user_online', user._id);
+    socket = io(SOCKET_URL);
+    socket.emit('user_online', user.id);
 
-    // Listen for incoming real-time messages
     socket.on('receive_message', (data) => {
-      // Only update messages if we're in that conversation
       setActiveContact((current) => {
-        if (current && (data.senderId === current._id || data.receiverId === current._id)) {
+        if (current && (data.senderId === current.id || data.receiverId === current.id)) {
           setMessages((prev) => [...prev, {
-            _id: Date.now().toString(),
-            sender: data.senderId,
+            id: Date.now().toString(),
+            senderId: data.senderId,
             text: data.message,
             createdAt: new Date().toISOString(),
           }]);
         }
         return current;
       });
-
-      // Refresh contacts to update last message
       loadContacts();
     });
 
-    return () => {
-      socket.disconnect();
-    };
-  }, [user._id]);
+    return () => socket.disconnect();
+  }, [user.id]);
 
   const loadContacts = async () => {
     try {
@@ -62,24 +55,20 @@ const ChatPage = () => {
     }
   };
 
-  // Load contacts on mount
   useEffect(() => { loadContacts(); }, []);
 
-  // Load browse users (opposite type)
   useEffect(() => {
     if (showBrowse) {
       API.get('/chat/users/browse').then((res) => setBrowseUsers(res.data)).catch(console.error);
     }
   }, [showBrowse]);
 
-  // Load messages when a contact is selected
   const openChat = async (contact) => {
     setActiveContact(contact);
     setShowBrowse(false);
     try {
-      const res = await API.get(`/chat/${contact._id}`);
+      const res = await API.get(`/chat/${contact.id}`);
       setMessages(res.data);
-      // Refresh contacts to clear unread badge
       loadContacts();
     } catch (err) {
       console.error(err);
@@ -88,181 +77,150 @@ const ChatPage = () => {
 
   const sendMessage = async () => {
     if (!newMessage.trim() || !activeContact) return;
-
     const text = newMessage.trim();
     setNewMessage('');
 
-    // Optimistic UI: add message immediately
-    const tempMsg = {
-      _id: Date.now().toString(),
-      sender: user._id,
-      text,
-      createdAt: new Date().toISOString(),
-    };
+    const tempMsg = { id: Date.now().toString(), senderId: user.id, text, createdAt: new Date().toISOString() };
     setMessages((prev) => [...prev, tempMsg]);
 
     try {
-      // Save to DB
-      await API.post('/chat/send', { receiverId: activeContact._id, text });
-
-      // Emit via socket for real-time delivery
-      socket.emit('send_message', {
-        senderId: user._id,
-        receiverId: activeContact._id,
-        message: text,
-      });
-
-      // Refresh contacts sidebar
+      await API.post('/chat/send', { receiverId: activeContact.id, text });
+      socket.emit('send_message', { senderId: user.id, receiverId: activeContact.id, message: text });
       loadContacts();
     } catch (err) {
       console.error('Send failed:', err);
     }
   };
 
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter') sendMessage();
-  };
+  const handleKeyPress = (e) => { if (e.key === 'Enter') sendMessage(); };
 
-  const formatTime = (dateStr) => {
-    return new Date(dateStr).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
-  };
+  const formatTime = (dateStr) =>
+    new Date(dateStr).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
 
-  const filteredContacts = contacts.filter((c) =>
-    c.name.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const filteredBrowse = browseUsers.filter((u) =>
-    u.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredContacts = contacts.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()));
+  const filteredBrowse = browseUsers.filter((u) => u.name.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <div className="dashboard-layout">
+    <div className="flex min-h-screen bg-slate-50">
       <Sidebar />
-      <div className="main-content" style={{ padding: '20px' }}>
-        <div className="chat-wrapper">
-
-          {/* ---- Left Sidebar: Contact List ---- */}
-          <div className="chat-sidebar">
-            <div className="search-box">
+      <div className="flex-1 p-5">
+        <div className="flex h-[calc(100vh-2.5rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card">
+          {/* Left: Contact List */}
+          <div className="flex w-72 shrink-0 flex-col border-r border-slate-100">
+            <div className="relative border-b border-slate-100 p-3">
+              <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
               <input
                 type="text"
-                placeholder="🔍 Search contacts..."
+                placeholder="Search contacts..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                className="form-input py-2 pl-9 text-sm"
               />
             </div>
 
-            {/* Toggle: Chats / Browse */}
-            <div style={{ display: 'flex', borderBottom: '1px solid #eee' }}>
+            <div className="flex border-b border-slate-100">
               <button
                 onClick={() => setShowBrowse(false)}
-                style={{
-                  flex: 1, padding: '10px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
-                  background: !showBrowse ? '#eff6ff' : 'white',
-                  color: !showBrowse ? '#2563eb' : '#94a3b8',
-                  borderBottom: !showBrowse ? '2px solid #2563eb' : '2px solid transparent',
-                }}
+                className={`flex-1 border-b-2 py-2.5 text-xs font-semibold ${
+                  !showBrowse ? 'border-leaf-600 bg-leaf-50 text-leaf-700' : 'border-transparent text-slate-400'
+                }`}
               >
-                💬 Chats
+                Chats
               </button>
               <button
                 onClick={() => setShowBrowse(true)}
-                style={{
-                  flex: 1, padding: '10px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
-                  background: showBrowse ? '#eff6ff' : 'white',
-                  color: showBrowse ? '#2563eb' : '#94a3b8',
-                  borderBottom: showBrowse ? '2px solid #2563eb' : '2px solid transparent',
-                }}
+                className={`flex-1 border-b-2 py-2.5 text-xs font-semibold ${
+                  showBrowse ? 'border-leaf-600 bg-leaf-50 text-leaf-700' : 'border-transparent text-slate-400'
+                }`}
               >
-                🔎 Browse
+                Browse
               </button>
             </div>
 
-            <div className="chat-list">
+            <div className="flex-1 overflow-y-auto">
               {showBrowse ? (
-                // Browse all wholesalers/shopkeepers
                 filteredBrowse.length === 0 ? (
-                  <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
-                    No users found
-                  </div>
+                  <div className="p-5 text-center text-xs text-slate-400">No users found</div>
                 ) : (
                   filteredBrowse.map((u) => (
                     <div
-                      key={u._id}
-                      className={`chat-item ${activeContact?._id === u._id ? 'active' : ''}`}
+                      key={u.id}
                       onClick={() => openChat(u)}
+                      className={`flex cursor-pointer items-center gap-2.5 px-4 py-3 hover:bg-slate-50 ${activeContact?.id === u.id ? 'bg-leaf-50' : ''}`}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: '#2563eb', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '15px', flexShrink: 0 }}>
-                          {u.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="chat-details">
-                          <h4>{u.name}</h4>
-                          <p style={{ color: '#94a3b8', fontSize: '12px' }}>{u.type} · {u.mobile}</p>
-                        </div>
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-leaf-600 text-sm font-bold text-white">
+                        {u.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="truncate text-sm font-semibold text-slate-800">{u.name}</h4>
+                        <p className="truncate text-xs text-slate-400">{u.type} · {u.mobile}</p>
                       </div>
                     </div>
                   ))
                 )
+              ) : filteredContacts.length === 0 ? (
+                <div className="p-6 text-center text-xs text-slate-400">
+                  <MessageCircle className="mx-auto mb-2" size={26} />
+                  No chats yet. Use Browse to start a conversation!
+                </div>
               ) : (
-                // Recent chats
-                filteredContacts.length === 0 ? (
-                  <div style={{ padding: '30px 20px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
-                    <div style={{ fontSize: '30px', marginBottom: '8px' }}>💬</div>
-                    No chats yet. Use Browse to start a conversation!
-                  </div>
-                ) : (
-                  filteredContacts.map((contact) => (
-                    <div
-                      key={contact._id}
-                      className={`chat-item ${activeContact?._id === contact._id ? 'active' : ''}`}
-                      onClick={() => openChat(contact)}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-                        <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: '#2563eb', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '15px', flexShrink: 0 }}>
-                          {contact.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="chat-details" style={{ flex: 1, minWidth: 0 }}>
-                          <h4>{contact.name}</h4>
-                          <p>{contact.lastMessage || 'No messages yet'}</p>
-                        </div>
+                filteredContacts.map((contact) => (
+                  <div
+                    key={contact.id}
+                    onClick={() => openChat(contact)}
+                    className={`flex cursor-pointer items-center justify-between gap-2 px-4 py-3 hover:bg-slate-50 ${activeContact?.id === contact.id ? 'bg-leaf-50' : ''}`}
+                  >
+                    <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-leaf-600 text-sm font-bold text-white">
+                        {contact.name.charAt(0).toUpperCase()}
                       </div>
-                      <div className="chat-meta">
-                        {contact.lastMessageTime && formatTime(contact.lastMessageTime)}
-                        {contact.unreadCount > 0 && (
-                          <div><span className="badge">{contact.unreadCount}</span></div>
-                        )}
+                      <div className="min-w-0 flex-1">
+                        <h4 className="truncate text-sm font-semibold text-slate-800">{contact.name}</h4>
+                        <p className="truncate text-xs text-slate-400">{contact.lastMessage || 'No messages yet'}</p>
                       </div>
                     </div>
-                  ))
-                )
+                    <div className="shrink-0 text-right text-[11px] text-slate-400">
+                      {contact.lastMessageTime && formatTime(contact.lastMessageTime)}
+                      {contact.unreadCount > 0 && (
+                        <div className="mt-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-leaf-600 px-1 text-[10px] font-bold text-white">
+                          {contact.unreadCount}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))
               )}
             </div>
           </div>
 
-          {/* ---- Right: Chat Window ---- */}
+          {/* Right: Chat Window */}
           {activeContact ? (
-            <div className="chat-main">
-              {/* Header */}
-              <div className="chat-header">
-                <h3>{activeContact.name}</h3>
-                <p className="status">● Online</p>
+            <div className="flex flex-1 flex-col">
+              <div className="border-b border-slate-100 px-5 py-4">
+                <h3 className="font-semibold text-slate-900">{activeContact.name}</h3>
+                <p className="text-xs text-leaf-600">● Online</p>
               </div>
 
-              {/* Messages */}
-              <div className="chat-messages">
+              <div className="flex-1 space-y-2 overflow-y-auto bg-slate-50 p-5">
                 {messages.length === 0 ? (
-                  <div style={{ textAlign: 'center', color: '#94a3b8', marginTop: '60px' }}>
-                    <div style={{ fontSize: '40px', marginBottom: '10px' }}>👋</div>
+                  <div className="mt-16 text-center text-slate-400">
                     <p>Say hello to {activeContact.name}!</p>
                   </div>
                 ) : (
                   messages.map((msg) => {
-                    const isSent = msg.sender === user._id || msg.sender?._id === user._id;
+                    const isSent = msg.senderId === user.id;
                     return (
-                      <div key={msg._id} className={`message ${isSent ? 'sent' : 'received'}`}>
-                        {msg.text}
-                        <span>{formatTime(msg.createdAt)}</span>
+                      <div key={msg.id} className={`flex ${isSent ? 'justify-end' : 'justify-start'}`}>
+                        <div
+                          className={`max-w-xs rounded-2xl px-4 py-2 text-sm ${
+                            isSent ? 'rounded-br-sm bg-leaf-600 text-white' : 'rounded-bl-sm bg-white text-slate-800 shadow-sm'
+                          }`}
+                        >
+                          {msg.text}
+                          <div className={`mt-1 text-[10px] ${isSent ? 'text-leaf-100' : 'text-slate-400'}`}>
+                            {formatTime(msg.createdAt)}
+                          </div>
+                        </div>
                       </div>
                     );
                   })
@@ -270,27 +228,27 @@ const ChatPage = () => {
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Input */}
-              <div className="chat-input">
+              <div className="flex items-center gap-2 border-t border-slate-100 p-3">
                 <input
                   type="text"
                   placeholder="Type a message..."
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
                   onKeyPress={handleKeyPress}
+                  className="form-input flex-1"
                 />
-                <button onClick={sendMessage}>Send</button>
+                <button onClick={sendMessage} className="btn-primary px-4">
+                  <Send size={16} />
+                </button>
               </div>
             </div>
           ) : (
-            <div className="chat-main">
-              <div className="chat-empty">
-                <div style={{ fontSize: '60px' }}>💬</div>
-                <p style={{ fontSize: '16px', fontWeight: 600 }}>Select a conversation</p>
-                <p style={{ fontSize: '13px' }}>
-                  Choose from your chats or browse {user.type === 'shopkeeper' ? 'wholesalers' : 'shopkeepers'}
-                </p>
-              </div>
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 text-slate-400">
+              <MessageCircle size={56} strokeWidth={1.25} />
+              <p className="font-semibold text-slate-600">Select a conversation</p>
+              <p className="text-sm">
+                Choose from your chats or browse {user.type === 'shopkeeper' ? 'wholesalers' : 'shopkeepers'}
+              </p>
             </div>
           )}
         </div>
