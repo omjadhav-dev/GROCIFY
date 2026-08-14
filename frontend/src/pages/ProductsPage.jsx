@@ -1,12 +1,24 @@
 import React, { useState, useEffect } from 'react';
+import {
+  Search, Plus, Pencil, Trash2, ShoppingCart, X, CheckCircle2, AlertTriangle, PackageOpen,
+  Carrot, Apple, Milk, Wheat, Flame, CupSoda, Popcorn, Package,
+} from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 import { useAuth } from '../context/AuthContext';
 import API from '../api';
 
-// Emoji icon for product categories
 const categoryIcon = (cat) => {
-  const map = { Vegetables: '🥦', Fruits: '🍎', Dairy: '🥛', Grains: '🌾', Spices: '🌶️', Beverages: '🧃', Snacks: '🍿', General: '🛒' };
-  return map[cat] || '📦';
+  const map = {
+    Vegetables: Carrot,
+    Fruits: Apple,
+    Dairy: Milk,
+    Grains: Wheat,
+    Spices: Flame,
+    Beverages: CupSoda,
+    Snacks: Popcorn,
+    General: Package,
+  };
+  return map[cat] || Package;
 };
 
 // ---- Wholesaler: Add/Edit Product Modal ----
@@ -29,15 +41,8 @@ const ProductModal = ({ product, onClose, onSave }) => {
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      setError('Please select an image file');
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      setError('Image must be smaller than 5MB');
-      return;
-    }
+    if (!file.type.startsWith('image/')) return setError('Please select an image file');
+    if (file.size > 5 * 1024 * 1024) return setError('Image must be smaller than 5MB');
 
     setError('');
     setImageFile(file);
@@ -59,16 +64,10 @@ const ProductModal = ({ product, onClose, onSave }) => {
       if (imageFile) {
         data.append('image', imageFile);
       } else if (product && !imagePreview) {
-        // Existing product, image was cleared by the user
         data.append('removeImage', 'true');
       }
 
-      let res;
-      if (product) {
-        res = await API.put(`/products/${product._id}`, data);
-      } else {
-        res = await API.post('/products', data);
-      }
+      const res = product ? await API.put(`/products/${product.id}`, data) : await API.post('/products', data);
       onSave(res.data, !!product);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to save product');
@@ -78,50 +77,50 @@ const ProductModal = ({ product, onClose, onSave }) => {
   };
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-box">
-        <h3>{product ? 'Edit Product' : 'Add New Product'}</h3>
-        {error && <p style={{ color: '#ef4444', fontSize: '13px', marginBottom: '12px' }}>⚠️ {error}</p>}
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>Product Name *</label>
-            <input name="name" value={form.name} onChange={handleChange} placeholder="e.g. Basmati Rice" required />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+        <h3 className="mb-4 text-lg font-semibold text-slate-900">{product ? 'Edit Product' : 'Add New Product'}</h3>
+        {error && (
+          <p className="mb-3 flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+            <AlertTriangle size={15} /> {error}
+          </p>
+        )}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="form-label">Product Name *</label>
+            <input className="form-input" name="name" value={form.name} onChange={handleChange} placeholder="e.g. Basmati Rice" required />
           </div>
-          <div className="form-group">
-            <label>Description</label>
-            <input name="description" value={form.description} onChange={handleChange} placeholder="Optional description" />
+          <div>
+            <label className="form-label">Description</label>
+            <input className="form-input" name="description" value={form.description} onChange={handleChange} placeholder="Optional description" />
           </div>
-          <div className="form-group">
-            <label>Product Image</label>
+          <div>
+            <label className="form-label">Product Image</label>
             {imagePreview ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-                <img
-                  src={imagePreview}
-                  alt="Preview"
-                  style={{ width: '64px', height: '64px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #e2e8f0' }}
-                />
-                <button type="button" className="btn btn-outline" style={{ fontSize: '12px', padding: '6px 12px' }} onClick={handleRemoveImage}>
-                  ✕ Remove
+              <div className="flex items-center gap-3">
+                <img src={imagePreview} alt="Preview" className="h-16 w-16 rounded-lg border border-slate-200 object-cover" />
+                <button type="button" className="btn-outline px-3 py-1.5 text-xs" onClick={handleRemoveImage}>
+                  <X size={13} /> Remove
                 </button>
               </div>
             ) : (
-              <input type="file" accept="image/*" onChange={handleImageChange} />
+              <input type="file" accept="image/*" onChange={handleImageChange} className="text-sm" />
             )}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div className="form-group">
-              <label>Price (₹) *</label>
-              <input name="price" type="number" value={form.price} onChange={handleChange} placeholder="0" min="0" required />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="form-label">Price (₹) *</label>
+              <input className="form-input" name="price" type="number" value={form.price} onChange={handleChange} placeholder="0" min="0" required />
             </div>
-            <div className="form-group">
-              <label>Stock *</label>
-              <input name="stock" type="number" value={form.stock} onChange={handleChange} placeholder="0" min="0" required />
+            <div>
+              <label className="form-label">Stock *</label>
+              <input className="form-input" name="stock" type="number" value={form.stock} onChange={handleChange} placeholder="0" min="0" required />
             </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div className="form-group">
-              <label>Unit</label>
-              <select name="unit" value={form.unit} onChange={handleChange}>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="form-label">Unit</label>
+              <select className="form-input" name="unit" value={form.unit} onChange={handleChange}>
                 <option value="piece">Piece</option>
                 <option value="kg">Kg</option>
                 <option value="gram">Gram</option>
@@ -132,9 +131,9 @@ const ProductModal = ({ product, onClose, onSave }) => {
                 <option value="box">Box</option>
               </select>
             </div>
-            <div className="form-group">
-              <label>Category</label>
-              <select name="category" value={form.category} onChange={handleChange}>
+            <div>
+              <label className="form-label">Category</label>
+              <select className="form-input" name="category" value={form.category} onChange={handleChange}>
                 <option>General</option>
                 <option>Vegetables</option>
                 <option>Fruits</option>
@@ -146,9 +145,9 @@ const ProductModal = ({ product, onClose, onSave }) => {
               </select>
             </div>
           </div>
-          <div className="modal-actions">
-            <button type="button" className="btn btn-outline" onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={saving}>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" className="btn-outline" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn-primary" disabled={saving}>
               {saving ? 'Saving...' : product ? 'Update Product' : 'Add Product'}
             </button>
           </div>
@@ -175,8 +174,8 @@ const OrderModal = ({ product, onClose }) => {
     setError('');
     try {
       await API.post('/orders', {
-        items: [{ productId: product._id, quantity: Number(qty) }],
-        wholesalerId: product.wholesaler._id || product.wholesaler,
+        items: [{ productId: product.id, quantity: Number(qty) }],
+        wholesalerId: product.wholesaler?.id || product.wholesalerId,
         deliveryAddress: address,
         note,
       });
@@ -189,40 +188,46 @@ const OrderModal = ({ product, onClose }) => {
   };
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-box">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
         {success ? (
-          <div style={{ textAlign: 'center', padding: '20px' }}>
-            <div style={{ fontSize: '50px', marginBottom: '16px' }}>✅</div>
-            <h3 style={{ marginBottom: '8px' }}>Order Placed!</h3>
-            <p style={{ color: '#64748b', marginBottom: '20px' }}>Your order has been sent to the wholesaler.</p>
-            <button className="btn btn-primary" onClick={onClose}>Done</button>
+          <div className="py-4 text-center">
+            <CheckCircle2 className="mx-auto mb-3 text-leaf-600" size={48} />
+            <h3 className="mb-1 text-lg font-semibold text-slate-900">Order Placed!</h3>
+            <p className="mb-5 text-sm text-slate-500">Your order has been sent to the wholesaler.</p>
+            <button className="btn-primary" onClick={onClose}>Done</button>
           </div>
         ) : (
           <>
-            <h3>Place Order — {product.name}</h3>
-            <p style={{ color: '#64748b', fontSize: '13px', margin: '4px 0 16px' }}>
+            <h3 className="text-lg font-semibold text-slate-900">Place Order — {product.name}</h3>
+            <p className="mb-4 mt-1 text-sm text-slate-500">
               ₹{product.price} per {product.unit} · Available: {product.stock} {product.unit}s
             </p>
-            {error && <p style={{ color: '#ef4444', fontSize: '13px', marginBottom: '12px' }}>⚠️ {error}</p>}
-            <div className="form-group">
-              <label>Quantity ({product.unit})</label>
-              <input type="number" min="1" max={product.stock} value={qty} onChange={(e) => setQty(e.target.value)} />
+            {error && (
+              <p className="mb-3 flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+                <AlertTriangle size={15} /> {error}
+              </p>
+            )}
+            <div className="space-y-4">
+              <div>
+                <label className="form-label">Quantity ({product.unit})</label>
+                <input className="form-input" type="number" min="1" max={product.stock} value={qty} onChange={(e) => setQty(e.target.value)} />
+              </div>
+              <div>
+                <label className="form-label">Delivery Address</label>
+                <input className="form-input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Enter delivery address" />
+              </div>
+              <div>
+                <label className="form-label">Note (optional)</label>
+                <input className="form-input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Any special instructions?" />
+              </div>
+              <div className="rounded-lg bg-leaf-50 px-4 py-3 text-sm font-semibold text-leaf-800">
+                Total: ₹{(product.price * qty).toFixed(2)}
+              </div>
             </div>
-            <div className="form-group">
-              <label>Delivery Address</label>
-              <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Enter delivery address" />
-            </div>
-            <div className="form-group">
-              <label>Note (optional)</label>
-              <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Any special instructions?" />
-            </div>
-            <div style={{ background: '#f0f4ff', borderRadius: '8px', padding: '12px', marginBottom: '16px' }}>
-              <strong>Total: ₹{(product.price * qty).toFixed(2)}</strong>
-            </div>
-            <div className="modal-actions">
-              <button className="btn btn-outline" onClick={onClose}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleOrder} disabled={loading}>
+            <div className="mt-5 flex justify-end gap-2">
+              <button className="btn-outline" onClick={onClose}>Cancel</button>
+              <button className="btn-primary" onClick={handleOrder} disabled={loading}>
                 {loading ? 'Placing...' : 'Confirm Order'}
               </button>
             </div>
@@ -239,7 +244,6 @@ const ProductsPage = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [selectedProduct, setSelectedProduct] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editProduct, setEditProduct] = useState(null);
   const [orderProduct, setOrderProduct] = useState(null);
@@ -263,7 +267,7 @@ const ProductsPage = () => {
     if (!window.confirm('Delete this product?')) return;
     try {
       await API.delete(`/products/${id}`);
-      setProducts(products.filter((p) => p._id !== id));
+      setProducts(products.filter((p) => p.id !== id));
     } catch (err) {
       alert(err.response?.data?.message || 'Delete failed');
     }
@@ -271,7 +275,7 @@ const ProductsPage = () => {
 
   const handleSave = (savedProduct, isEdit) => {
     if (isEdit) {
-      setProducts(products.map((p) => (p._id === savedProduct._id ? savedProduct : p)));
+      setProducts(products.map((p) => (p.id === savedProduct.id ? savedProduct : p)));
     } else {
       setProducts([savedProduct, ...products]);
     }
@@ -279,101 +283,97 @@ const ProductsPage = () => {
     setEditProduct(null);
   };
 
-  const filtered = products.filter((p) =>
-    p.name.toLowerCase().includes(search.toLowerCase()) ||
-    p.category?.toLowerCase().includes(search.toLowerCase())
+  const filtered = products.filter(
+    (p) =>
+      p.name.toLowerCase().includes(search.toLowerCase()) ||
+      p.category?.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
-    <div className="dashboard-layout">
+    <div className="flex min-h-screen bg-slate-50">
       <Sidebar />
-      <div className="main-content">
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-          <h1 className="page-title" style={{ marginBottom: 0 }}>
-            {isWholesaler ? '📦 My Products' : '🛒 Browse Products'}
+      <div className="flex-1 p-8">
+        <div className="mb-6 flex items-center justify-between">
+          <h1 className="font-display text-2xl font-semibold text-slate-900">
+            {isWholesaler ? 'My Products' : 'Browse Products'}
           </h1>
           {isWholesaler && (
-            <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
-              ➕ Add Product
+            <button className="btn-primary" onClick={() => setShowAddModal(true)}>
+              <Plus size={16} /> Add Product
             </button>
           )}
         </div>
 
-        {/* Search */}
-        <div style={{ marginBottom: '20px' }}>
+        <div className="relative mb-5 max-w-sm">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
           <input
             type="text"
-            placeholder="🔍 Search by name or category..."
+            placeholder="Search by name or category..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{ padding: '10px 16px', border: '1.5px solid #e2e8f0', borderRadius: '25px', width: '100%', maxWidth: '400px', outline: 'none', fontSize: '14px' }}
+            className="form-input rounded-full pl-10"
           />
         </div>
 
-        {/* Products Grid */}
         {loading ? (
-          <p style={{ color: '#94a3b8' }}>Loading products...</p>
+          <p className="text-slate-400">Loading products...</p>
         ) : filtered.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '60px', color: '#94a3b8' }}>
-            <div style={{ fontSize: '48px', marginBottom: '12px' }}>📭</div>
+          <div className="py-16 text-center text-slate-400">
+            <PackageOpen className="mx-auto mb-3" size={44} />
             <p>{isWholesaler ? 'No products yet. Add your first product!' : 'No products found.'}</p>
           </div>
         ) : (
-          <div className="products-grid">
-            {filtered.map((product) => (
-              <div className="product-card" key={product._id}>
-                <div className="product-card-img">
-                  {product.image ? (
-                    <img
-                      src={product.image}
-                      alt={product.name}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }}
-                    />
-                  ) : (
-                    categoryIcon(product.category)
-                  )}
-                </div>
-                <div className="product-card-body">
-                  <div className="product-card-name">{product.name}</div>
-                  <div className="product-card-price">₹{product.price} / {product.unit}</div>
-                  <div className="product-card-meta">
-                    Stock: {product.stock} {product.unit}s
-                    {!isWholesaler && <span> · {product.wholesalerName}</span>}
-                  </div>
-                  <div className="product-card-meta" style={{ marginBottom: '12px' }}>
-                    {product.category}
-                    {product.description && <div style={{ marginTop: '4px' }}>{product.description}</div>}
-                  </div>
-                  <div className="product-card-actions">
-                    {isWholesaler ? (
-                      <>
-                        <button className="btn btn-outline" style={{ fontSize: '12px', padding: '6px 12px' }} onClick={() => setEditProduct(product)}>
-                          ✏️ Edit
-                        </button>
-                        <button className="btn btn-danger" style={{ fontSize: '12px', padding: '6px 12px' }} onClick={() => handleDelete(product._id)}>
-                          🗑️ Delete
-                        </button>
-                      </>
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {filtered.map((product) => {
+              const CatIcon = categoryIcon(product.category);
+              return (
+                <div className="card overflow-hidden !p-0" key={product.id}>
+                  <div className="flex h-36 items-center justify-center bg-leaf-50 text-leaf-500">
+                    {product.image ? (
+                      <img src={product.image} alt={product.name} className="h-full w-full object-cover" />
                     ) : (
-                      <button
-                        className="btn btn-primary"
-                        style={{ fontSize: '12px', padding: '6px 12px', width: '100%' }}
-                        onClick={() => setOrderProduct(product)}
-                        disabled={product.stock === 0}
-                      >
-                        {product.stock === 0 ? 'Out of Stock' : '🛒 Order Now'}
-                      </button>
+                      <CatIcon size={44} strokeWidth={1.5} />
                     )}
                   </div>
+                  <div className="p-4">
+                    <div className="font-semibold text-slate-900">{product.name}</div>
+                    <div className="text-sm font-semibold text-leaf-700">₹{product.price} / {product.unit}</div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      Stock: {product.stock} {product.unit}s
+                      {!isWholesaler && <span> · {product.wholesalerName}</span>}
+                    </div>
+                    <div className="mt-1 text-xs text-slate-400">
+                      {product.category}
+                      {product.description && <div className="mt-1">{product.description}</div>}
+                    </div>
+                    <div className="mt-3 flex gap-2">
+                      {isWholesaler ? (
+                        <>
+                          <button className="btn-outline flex-1 px-3 py-1.5 text-xs" onClick={() => setEditProduct(product)}>
+                            <Pencil size={13} /> Edit
+                          </button>
+                          <button className="btn-danger flex-1 px-3 py-1.5 text-xs" onClick={() => handleDelete(product.id)}>
+                            <Trash2 size={13} /> Delete
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          className="btn-primary w-full px-3 py-1.5 text-xs"
+                          onClick={() => setOrderProduct(product)}
+                          disabled={product.stock === 0}
+                        >
+                          {product.stock === 0 ? 'Out of Stock' : (<><ShoppingCart size={13} /> Order Now</>)}
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
 
-      {/* Modals */}
       {(showAddModal || editProduct) && (
         <ProductModal
           product={editProduct}
@@ -381,9 +381,7 @@ const ProductsPage = () => {
           onSave={handleSave}
         />
       )}
-      {orderProduct && (
-        <OrderModal product={orderProduct} onClose={() => setOrderProduct(null)} />
-      )}
+      {orderProduct && <OrderModal product={orderProduct} onClose={() => setOrderProduct(null)} />}
     </div>
   );
 };
