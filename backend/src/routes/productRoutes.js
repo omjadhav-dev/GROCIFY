@@ -2,11 +2,12 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
-const Product = require('../models/Product');
+const { body } = require('express-validator');
+const { Product, User } = require('../models');
 const { protect, wholesalerOnly } = require('../middleware/authMiddleware');
 const upload = require('../middleware/upload');
+const validate = require('../middleware/validate');
 
-// Helper: delete an old uploaded image file when it's replaced/removed
 const deleteImageFile = (imagePath) => {
   if (!imagePath || !imagePath.startsWith('/uploads/')) return;
   const fullPath = path.join(__dirname, '..', imagePath);
@@ -20,14 +21,18 @@ const deleteImageFile = (imagePath) => {
 // @access  Private
 router.get('/', protect, async (req, res) => {
   try {
-    // Optional: filter by wholesaler or category via query params
-    const filter = {};
-    if (req.query.wholesaler) filter.wholesaler = req.query.wholesaler;
-    if (req.query.category) filter.category = req.query.category;
+    const where = {};
+    if (req.query.wholesaler) where.wholesalerId = req.query.wholesaler;
+    if (req.query.category) where.category = req.query.category;
 
-    const products = await Product.find(filter).populate('wholesaler', 'name email mobile');
+    const products = await Product.findAll({
+      where,
+      include: [{ model: User, as: 'wholesaler', attributes: ['id', 'name', 'email', 'mobile'] }],
+      order: [['createdAt', 'DESC']],
+    });
     res.json(products);
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: 'Error fetching products' });
   }
 });
@@ -37,7 +42,10 @@ router.get('/', protect, async (req, res) => {
 // @access  Private - Wholesaler only
 router.get('/my', protect, wholesalerOnly, async (req, res) => {
   try {
-    const products = await Product.find({ wholesaler: req.user._id });
+    const products = await Product.findAll({
+      where: { wholesalerId: req.user.id },
+      order: [['createdAt', 'DESC']],
+    });
     res.json(products);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching your products' });
@@ -47,47 +55,51 @@ router.get('/my', protect, wholesalerOnly, async (req, res) => {
 // @route   POST /api/products
 // @desc    Add a new product (wholesaler only)
 // @access  Private - Wholesaler only
-router.post('/', protect, wholesalerOnly, upload.single('image'), async (req, res) => {
-  const { name, description, price, stock, unit, category } = req.body;
+router.post(
+  '/',
+  protect,
+  wholesalerOnly,
+  upload.single('image'),
+  [
+    body('name').trim().notEmpty().withMessage('Product name is required'),
+    body('price').isFloat({ min: 0 }).withMessage('Price must be a positive number'),
+    body('stock').isInt({ min: 0 }).withMessage('Stock must be a non-negative number'),
+  ],
+  validate,
+  async (req, res) => {
+    const { name, description, price, stock, unit, category } = req.body;
+    try {
+      const image = req.file ? `/uploads/${req.file.filename}` : '';
 
-  if (!name || !price || stock === undefined) {
-    return res.status(400).json({ message: 'Name, price, and stock are required' });
+      const product = await Product.create({
+        name,
+        description,
+        price,
+        stock,
+        unit: unit || 'piece',
+        category: category || 'General',
+        image,
+        wholesalerId: req.user.id,
+        wholesalerName: req.user.name,
+      });
+
+      res.status(201).json(product);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: 'Error adding product' });
+    }
   }
-
-  try {
-    const image = req.file ? `/uploads/${req.file.filename}` : '';
-
-    const product = await Product.create({
-      name,
-      description,
-      price,
-      stock,
-      unit: unit || 'piece',
-      category: category || 'General',
-      image,
-      wholesaler: req.user._id,
-      wholesalerName: req.user.name,
-    });
-
-    res.status(201).json(product);
-  } catch (error) {
-    res.status(500).json({ message: 'Error adding product' });
-  }
-});
+);
 
 // @route   PUT /api/products/:id
 // @desc    Update a product (wholesaler only, must own it)
 // @access  Private - Wholesaler only
 router.put('/:id', protect, wholesalerOnly, upload.single('image'), async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const product = await Product.findByPk(req.params.id);
+    if (!product) return res.status(404).json({ message: 'Product not found' });
 
-    if (!product) {
-      return res.status(404).json({ message: 'Product not found' });
-    }
-
-    // Make sure the wholesaler owns this product
-    if (product.wholesaler.toString() !== req.user._id.toString()) {
+    if (product.wholesalerId !== req.user.id) {
       return res.status(403).json({ message: 'Not authorized to edit this product' });
     }
 
@@ -101,18 +113,17 @@ router.put('/:id', protect, wholesalerOnly, upload.single('image'), async (req, 
     product.category = category || product.category;
 
     if (req.file) {
-      // A new image was uploaded — replace the old one
       deleteImageFile(product.image);
       product.image = `/uploads/${req.file.filename}`;
     } else if (removeImage === 'true') {
-      // User explicitly cleared the image
       deleteImageFile(product.image);
       product.image = '';
     }
 
-    const updatedProduct = await product.save();
-    res.json(updatedProduct);
+    await product.save();
+    res.json(product);
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: 'Error updating product' });
   }
 });
@@ -122,17 +133,14 @@ router.put('/:id', protect, wholesalerOnly, upload.single('image'), async (req, 
 // @access  Private - Wholesaler only
 router.delete('/:id', protect, wholesalerOnly, async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const product = await Product.findByPk(req.params.id);
+    if (!product) return res.status(404).json({ message: 'Product not found' });
 
-    if (!product) {
-      return res.status(404).json({ message: 'Product not found' });
-    }
-
-    if (product.wholesaler.toString() !== req.user._id.toString()) {
+    if (product.wholesalerId !== req.user.id) {
       return res.status(403).json({ message: 'Not authorized to delete this product' });
     }
 
-    await product.deleteOne();
+    await product.destroy();
     deleteImageFile(product.image);
     res.json({ message: 'Product deleted successfully' });
   } catch (error) {
@@ -142,9 +150,7 @@ router.delete('/:id', protect, wholesalerOnly, async (req, res) => {
 
 // Handle multer errors (bad file type, too large, etc.) with a clean JSON response
 router.use((err, req, res, next) => {
-  if (err && err.message) {
-    return res.status(400).json({ message: err.message });
-  }
+  if (err && err.message) return res.status(400).json({ message: err.message });
   next(err);
 });
 
