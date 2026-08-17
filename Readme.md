@@ -53,7 +53,7 @@ involved than a standard shop.
 ## Project Structure
 
 ```
-grocify-mern-mysql/
+grocify/
 ├── backend/
 │   └── src/
 │       ├── config/db.js          # Sequelize connection
@@ -195,10 +195,8 @@ trigger a real-time notification to the other party via Socket.IO.
 
 ## Roadmap
 
-- [ ] Move image storage from local disk (Multer) to a cloud provider like Cloudinary
 - [ ] Payment gateway integration
 - [ ] Email/SMS notifications alongside in-app ones
-- [ ] Product reviews & ratings
 
 ## License
 
