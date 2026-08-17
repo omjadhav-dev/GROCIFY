@@ -75,7 +75,7 @@ const ProfilePage = () => {
     `mb-4 rounded-lg px-3.5 py-2.5 text-sm ${type === 'success' ? 'bg-leaf-50 text-leaf-700' : 'bg-red-50 text-red-600'}`;
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="flex min-h-screen bg-cream-50">
       <Sidebar />
       <div className="flex-1 p-8">
         <h1 className="mb-6 font-display text-2xl font-semibold text-slate-900">My Profile</h1>
