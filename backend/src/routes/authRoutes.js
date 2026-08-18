@@ -19,17 +19,18 @@ router.post(
     body('mobile').trim().notEmpty().withMessage('Mobile number is required'),
     body('address').trim().notEmpty().withMessage('Address is required'),
     body('type').isIn(['shopkeeper', 'wholesaler']).withMessage('Invalid account type'),
+    body('businessName').optional({ checkFalsy: true }).trim(),
   ],
   validate,
   async (req, res) => {
-    const { name, email, password, mobile, address, type } = req.body;
+    const { name, email, password, mobile, address, type, businessName } = req.body;
     try {
       const existingUser = await User.findOne({ where: { email: email.toLowerCase() } });
       if (existingUser) {
         return res.status(400).json({ message: 'Email already registered' });
       }
 
-      const user = await User.create({ name, email, password, mobile, address, type });
+      const user = await User.create({ name, email, password, mobile, address, type, businessName });
 
       res.status(201).json({
         id: user.id,
@@ -38,6 +39,7 @@ router.post(
         mobile: user.mobile,
         address: user.address,
         type: user.type,
+        businessName: user.businessName,
         token: generateToken(user.id),
       });
     } catch (error) {
@@ -80,6 +82,7 @@ router.post(
         mobile: user.mobile,
         address: user.address,
         type: user.type,
+        businessName: user.businessName,
         profileImage: user.profileImage,
         token: generateToken(user.id),
       });
