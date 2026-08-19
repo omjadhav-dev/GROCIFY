@@ -3,6 +3,7 @@ const router = express.Router();
 const { Order, OrderItem, Product, User } = require('../models');
 const { protect, shopkeeperOnly, wholesalerOnly } = require('../middleware/authMiddleware');
 const sequelize = require('../config/db');
+const { notifyUser } = require('../utils/notify');
 
 // @route   POST /api/orders
 // @desc    Shopkeeper places a new order
@@ -71,6 +72,15 @@ router.post('/', protect, shopkeeperOnly, async (req, res) => {
     await t.commit();
 
     const fullOrder = await Order.findByPk(order.id, { include: [{ model: OrderItem, as: 'items' }] });
+
+    // Let the wholesaler know a new order has come in
+    await notifyUser(wholesalerId, {
+      type: 'order_placed',
+      title: 'New order received',
+      message: `${req.user.name} placed an order worth ₹${totalAmount.toFixed(0)}`,
+      orderId: order.id,
+    });
+
     res.status(201).json(fullOrder);
   } catch (error) {
     await t.rollback();
@@ -119,6 +129,15 @@ router.put('/:id/status', protect, wholesalerOnly, async (req, res) => {
 
     order.status = status;
     await order.save();
+
+    // Let the shopkeeper know their order status changed
+    await notifyUser(order.shopkeeperId, {
+      type: 'order_status',
+      title: `Order #${String(order.id).padStart(6, '0')} ${status.toLowerCase()}`,
+      message: `Your order to ${order.wholesalerName} is now "${status}".`,
+      orderId: order.id,
+    });
+
     res.json(order);
   } catch (error) {
     res.status(500).json({ message: 'Error updating order status' });
