@@ -150,7 +150,7 @@ const OrdersPage = () => {
   const statuses = ['All', 'Pending', 'Accepted', 'Rejected', 'Dispatched', 'Delivered'];
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="flex min-h-screen bg-cream-50">
       <Sidebar />
       <div className="flex-1 p-8">
         <h1 className="mb-6 font-display text-2xl font-semibold text-slate-900">
