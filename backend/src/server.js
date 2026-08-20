@@ -8,6 +8,7 @@ const { Server } = require('socket.io');
 dotenv.config();
 
 const { sequelize } = require('./models');
+const { initSocket } = require('./socket');
 
 const app = express();
 const server = http.createServer(app);
@@ -35,45 +36,24 @@ const productRoutes = require('./routes/productRoutes');
 const orderRoutes = require('./routes/orderRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 const profileRoutes = require('./routes/profileRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
+const analyticsRoutes = require('./routes/analyticsRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/profile', profileRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // Health check
 app.get('/', (req, res) => {
   res.json({ message: 'Grocify API is running' });
 });
 
-// Socket.IO - Real-time chat logic
-const onlineUsers = {}; // userId -> socketId
-
-io.on('connection', (socket) => {
-  console.log('A user connected:', socket.id);
-
-  socket.on('user_online', (userId) => {
-    onlineUsers[userId] = socket.id;
-  });
-
-  socket.on('send_message', (data) => {
-    // data = { senderId, receiverId, message }
-    const receiverSocketId = onlineUsers[data.receiverId];
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit('receive_message', data);
-    }
-  });
-
-  socket.on('disconnect', () => {
-    for (const userId in onlineUsers) {
-      if (onlineUsers[userId] === socket.id) {
-        delete onlineUsers[userId];
-        break;
-      }
-    }
-  });
-});
+// Socket.IO - real-time chat + notifications (see ./socket.js)
+initSocket(io);
 
 const PORT = process.env.PORT || 5000;
 

@@ -4,6 +4,7 @@ const Product = require('./Product');
 const Order = require('./Order');
 const OrderItem = require('./OrderItem');
 const Message = require('./Message');
+const Notification = require('./Notification');
 
 // ---- Associations ----
 
@@ -24,4 +25,8 @@ OrderItem.belongsTo(Product, { foreignKey: 'productId' });
 Message.belongsTo(User, { as: 'sender', foreignKey: 'senderId' });
 Message.belongsTo(User, { as: 'receiver', foreignKey: 'receiverId' });
 
-module.exports = { sequelize, User, Product, Order, OrderItem, Message };
+// Notification belongs to the user it's for
+Notification.belongsTo(User, { foreignKey: 'userId' });
+User.hasMany(Notification, { foreignKey: 'userId' });
+
+module.exports = { sequelize, User, Product, Order, OrderItem, Message, Notification };
