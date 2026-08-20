@@ -101,7 +101,7 @@ const ChatPage = () => {
   const filteredBrowse = browseUsers.filter((u) => u.name.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="flex min-h-screen bg-cream-50">
       <Sidebar />
       <div className="flex-1 p-5">
         <div className="flex h-[calc(100vh-2.5rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card">
