@@ -26,6 +26,11 @@ involved than a standard shop.
 - **Real-time notifications** — the moment an order is placed or its status
   changes, the other party gets notified instantly (Socket.IO), with a
   notification center showing unread counts and history
+- **Live stock tracking** — placing an order atomically reserves stock
+  (row-locked, so two shopkeepers can't oversell the same units); a
+  rejected order restores it. Every connected client sees stock levels
+  update instantly, and wholesalers get an automatic alert when a product
+  hits their configured low-stock threshold or runs out entirely
 - **Wholesaler analytics** — revenue summary, average order value, order
   status breakdown, a 14-day revenue trend, and a top-selling-products
   breakdown, shown right on the dashboard
@@ -47,8 +52,7 @@ involved than a standard shop.
 
 > **Note on image storage:** product images currently go through Multer to
 > local disk (`backend/src/uploads`), served as static files. There's no
-> Cloudinary (or other cloud storage) integration yet — see
-> [Roadmap](#roadmap) below if you want to add one.
+> Cloudinary (or other cloud storage) integration yet.
 
 ## Project Structure
 
@@ -88,6 +92,18 @@ CREATE DATABASE grocify;
 
 Tables are created automatically on first run via `sequelize.sync()`. For
 production, replace this with proper Sequelize migrations.
+
+> **Note:** `sequelize.sync()` only creates tables that don't exist yet — it
+> never alters an existing table to match model changes. If you're updating
+> an existing database rather than starting fresh, run any new-column
+> migrations by hand, e.g. for the low-stock-threshold field added to
+> `Product`:
+> ```sql
+> ALTER TABLE products ADD COLUMN low_stock_threshold INT NOT NULL DEFAULT 5;
+> ```
+> (Column names are `snake_case` — the models use Sequelize's `underscored`
+> option, so a model field like `lowStockThreshold` maps to
+> `low_stock_threshold` in MySQL.)
 
 ### 2. Configure environment variables
 
@@ -147,10 +163,10 @@ All routes are prefixed with `/api`. 🔒 = requires a JWT
 ### Orders
 | Method | Endpoint                  | Description                                |
 |--------|------------------------------|-----------------------------------------------|
-| POST   | `/orders` 🔒🧑‍🌾            | Place an order (runs in a DB transaction)     |
+| POST   | `/orders` 🔒🧑‍🌾            | Place an order (transaction; row-locks and decrements stock, broadcasts the new stock level, alerts the wholesaler if it's now low/out) |
 | GET    | `/orders/my` 🔒              | List the logged-in user's orders             |
 | GET    | `/orders/:id` 🔒             | Get order detail (items, addresses, etc.)    |
-| PUT    | `/orders/:id/status` 🔒🏪    | Update order status — triggers a notification |
+| PUT    | `/orders/:id/status` 🔒🏪    | Update order status — triggers a notification; a `Rejected` status restores the reserved stock |
 
 ### Notifications
 | Method | Endpoint                      | Description                        |
@@ -183,7 +199,7 @@ All routes are prefixed with `/api`. 🔒 = requires a JWT
 ## Data Model
 
 - **User** — name, email, mobile, address, businessName, role (`shopkeeper` \| `wholesaler`), hashed password
-- **Product** — name, description, image, price, stock, unit, category, belongs to a wholesaler (User)
+- **Product** — name, description, image, price, stock, lowStockThreshold, unit, category, belongs to a wholesaler (User)
 - **Order** — belongs to a shopkeeper and a wholesaler, status, deliveryAddress, note, totalAmount, has many OrderItems
 - **OrderItem** — belongs to an Order and a Product; stores quantity and price *at the time of the order*, so later price changes don't rewrite history
 - **Message** — sender, receiver, text, timestamp
@@ -193,10 +209,24 @@ Order placement runs inside a **Sequelize transaction** — if any item write
 fails, the whole order rolls back. Both order placement and status updates
 trigger a real-time notification to the other party via Socket.IO.
 
-## Roadmap
+### Stock lifecycle
 
-- [ ] Payment gateway integration
-- [ ] Email/SMS notifications alongside in-app ones
+- **Placing an order** row-locks each product (`SELECT ... FOR UPDATE`
+  within the transaction), verifies sufficient stock, and decrements it —
+  so stock is reserved immediately rather than only checked at
+  fulfillment, and two concurrent orders can't both succeed on the same
+  last units.
+- **Rejecting an order** restores the quantities it had reserved.
+- After any stock change, a `product_stock_updated` Socket.IO event is
+  broadcast to all connected clients, and the wholesaler receives a
+  notification if the product is now at or below `lowStockThreshold`
+  (default 5) or at zero.
+
+## Future Scope
+
+- [ ] **Smart reorder suggestions for shopkeepers** — track each shopkeeper's past orders per product to learn their typical reorder interval (e.g. rice every ~12 days), then proactively prompt them ("you're due to reorder rice") before they run out, instead of waiting for them to notice and search manually
+- [ ] **Price/demand anomaly detection** — compare a wholesaler's listed price against others in the same category to flag ones that are unusually high or low, and monitor order volume per product to catch sudden spikes (e.g. hoarding ahead of a festival) so wholesalers can react to demand shifts early
+- [ ] **AI assistant over the existing chat infrastructure** — extend `chatRoutes.js`/the `Message` model so shopkeepers can ask natural-language questions ("which wholesalers have onions in stock") and get an answer pulled from the live product catalog, instead of manually browsing or messaging each wholesaler
 
 ## License
 
