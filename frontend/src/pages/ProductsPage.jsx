@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { io } from 'socket.io-client';
 import {
   Search, Plus, Pencil, Trash2, ShoppingCart, X, CheckCircle2, AlertTriangle, PackageOpen,
   Carrot, Apple, Milk, Wheat, Flame, CupSoda, Popcorn, Package,
@@ -6,6 +7,8 @@ import {
 import Sidebar from '../components/Sidebar';
 import { useAuth } from '../context/AuthContext';
 import API from '../api';
+
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
 
 const categoryIcon = (cat) => {
   const map = {
@@ -28,6 +31,7 @@ const ProductModal = ({ product, onClose, onSave }) => {
     description: product?.description || '',
     price: product?.price || '',
     stock: product?.stock || '',
+    lowStockThreshold: product?.lowStockThreshold ?? 5,
     unit: product?.unit || 'piece',
     category: product?.category || 'General',
   });
@@ -116,6 +120,11 @@ const ProductModal = ({ product, onClose, onSave }) => {
               <label className="form-label">Stock *</label>
               <input className="form-input" name="stock" type="number" value={form.stock} onChange={handleChange} placeholder="0" min="0" required />
             </div>
+          </div>
+          <div>
+            <label className="form-label">Low stock alert threshold</label>
+            <input className="form-input" name="lowStockThreshold" type="number" value={form.lowStockThreshold} onChange={handleChange} placeholder="5" min="0" />
+            <p className="mt-1 text-xs text-slate-400">You'll get an alert when stock drops to this number or below.</p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -263,6 +272,18 @@ const ProductsPage = () => {
 
   useEffect(() => { fetchProducts(); }, []);
 
+  // Live stock sync: whenever anyone's order changes a product's stock
+  // (placed, rejected, etc.), reflect it here immediately without a reload —
+  // so a shopkeeper never places an order for something that just sold out,
+  // and a wholesaler sees the count tick down in real time.
+  useEffect(() => {
+    const socket = io(SOCKET_URL);
+    socket.on('product_stock_updated', ({ productId, stock }) => {
+      setProducts((prev) => prev.map((p) => (p.id === productId ? { ...p, stock } : p)));
+    });
+    return () => socket.disconnect();
+  }, []);
+
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this product?')) return;
     try {
@@ -336,7 +357,15 @@ const ProductsPage = () => {
                     )}
                   </div>
                   <div className="p-4">
-                    <div className="font-semibold text-slate-900">{product.name}</div>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="font-semibold text-slate-900">{product.name}</div>
+                      {isWholesaler && product.stock === 0 && (
+                        <span className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700">Out of stock</span>
+                      )}
+                      {isWholesaler && product.stock > 0 && product.stock <= product.lowStockThreshold && (
+                        <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Low stock</span>
+                      )}
+                    </div>
                     <div className="text-sm font-semibold text-leaf-700">₹{product.price} / {product.unit}</div>
                     <div className="mt-1 text-xs text-slate-500">
                       Stock: {product.stock} {product.unit}s
