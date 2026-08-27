@@ -3,7 +3,7 @@ const router = express.Router();
 const { Order, OrderItem, Product, User } = require('../models');
 const { protect, shopkeeperOnly, wholesalerOnly } = require('../middleware/authMiddleware');
 const sequelize = require('../config/db');
-const { notifyUser } = require('../utils/notify');
+const { notifyUser, broadcastStockUpdate, checkStockAndAlertWholesaler } = require('../utils/notify');
 
 // @route   POST /api/orders
 // @desc    Shopkeeper places a new order
@@ -22,9 +22,16 @@ router.post('/', protect, shopkeeperOnly, async (req, res) => {
   try {
     let totalAmount = 0;
     const orderItemsData = [];
+    const updatedProducts = []; // products whose stock changed, for alerts/broadcast after commit
 
     for (const item of items) {
-      const product = await Product.findByPk(item.productId, { transaction: t });
+      // Row-locked read: holds the row until commit/rollback, so two shopkeepers
+      // ordering the same product at the same instant can't both succeed on
+      // stock that only one of them actually has left.
+      const product = await Product.findByPk(item.productId, {
+        transaction: t,
+        lock: t.LOCK.UPDATE,
+      });
       if (!product) {
         await t.rollback();
         return res.status(404).json({ message: `Product not found: ${item.productId}` });
@@ -43,6 +50,12 @@ router.post('/', protect, shopkeeperOnly, async (req, res) => {
       });
 
       totalAmount += Number(product.price) * item.quantity;
+
+      // Reserve the stock immediately so it's accurate for the next shopkeeper,
+      // not just at order-acceptance time.
+      product.stock -= item.quantity;
+      await product.save({ transaction: t });
+      updatedProducts.push(product);
     }
 
     const wholesaler = await User.findByPk(wholesalerId, { transaction: t });
@@ -80,6 +93,13 @@ router.post('/', protect, shopkeeperOnly, async (req, res) => {
       message: `${req.user.name} placed an order worth ₹${totalAmount.toFixed(0)}`,
       orderId: order.id,
     });
+
+    // Push the new stock levels to everyone browsing, and alert the
+    // wholesaler if any item just went low/out of stock.
+    for (const product of updatedProducts) {
+      broadcastStockUpdate(product);
+      await checkStockAndAlertWholesaler(product);
+    }
 
     res.status(201).json(fullOrder);
   } catch (error) {
@@ -129,6 +149,19 @@ router.put('/:id/status', protect, wholesalerOnly, async (req, res) => {
 
     order.status = status;
     await order.save();
+
+    // Stock was reserved when the order was placed. If it's rejected, that
+    // stock never actually left the warehouse, so give it back.
+    if (status === 'Rejected') {
+      for (const item of order.items) {
+        const product = await Product.findByPk(item.productId);
+        if (product) {
+          product.stock += item.quantity;
+          await product.save();
+          broadcastStockUpdate(product);
+        }
+      }
+    }
 
     // Let the shopkeeper know their order status changed
     await notifyUser(order.shopkeeperId, {
