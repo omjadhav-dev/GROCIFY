@@ -67,7 +67,7 @@ router.post(
   ],
   validate,
   async (req, res) => {
-    const { name, description, price, stock, unit, category } = req.body;
+    const { name, description, price, stock, lowStockThreshold, unit, category } = req.body;
     try {
       const image = req.file ? `/uploads/${req.file.filename}` : '';
 
@@ -76,6 +76,7 @@ router.post(
         description,
         price,
         stock,
+        lowStockThreshold: lowStockThreshold !== undefined && lowStockThreshold !== '' ? lowStockThreshold : 5,
         unit: unit || 'piece',
         category: category || 'General',
         image,
@@ -103,12 +104,13 @@ router.put('/:id', protect, wholesalerOnly, upload.single('image'), async (req, 
       return res.status(403).json({ message: 'Not authorized to edit this product' });
     }
 
-    const { name, description, price, stock, unit, category, removeImage } = req.body;
+    const { name, description, price, stock, lowStockThreshold, unit, category, removeImage } = req.body;
 
     product.name = name || product.name;
     product.description = description !== undefined ? description : product.description;
     product.price = price !== undefined ? price : product.price;
     product.stock = stock !== undefined ? stock : product.stock;
+    product.lowStockThreshold = lowStockThreshold !== undefined ? lowStockThreshold : product.lowStockThreshold;
     product.unit = unit || product.unit;
     product.category = category || product.category;
 
