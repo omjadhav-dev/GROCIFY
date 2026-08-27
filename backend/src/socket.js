@@ -44,4 +44,13 @@ function emitToUser(userId, event, payload) {
   }
 }
 
-module.exports = { initSocket, emitToUser };
+// Push a real-time event to every currently connected client — used for
+// things like stock changes, where any shopkeeper browsing the catalog
+// (not just one specific user) needs to see the update live.
+function broadcast(event, payload) {
+  if (ioInstance) {
+    ioInstance.emit(event, payload);
+  }
+}
+
+module.exports = { initSocket, emitToUser, broadcast };
