@@ -10,7 +10,9 @@ const Product = sequelize.define(
     price: { type: DataTypes.DECIMAL(10, 2), allowNull: false, validate: { min: 0 } },
     stock: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, validate: { min: 0 } },
     lowStockThreshold: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 5, validate: { min: 0 } },
+    minOrderQty: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1, validate: { min: 1 } },
     unit: { type: DataTypes.STRING, defaultValue: 'piece' },
+    packSize: { type: DataTypes.STRING, defaultValue: '' }, // actual quantity, e.g. "100gm", "1kg", "1packet"
     category: { type: DataTypes.STRING, defaultValue: 'General' },
     image: { type: DataTypes.STRING, defaultValue: '' },
     wholesalerId: { type: DataTypes.INTEGER, allowNull: false },

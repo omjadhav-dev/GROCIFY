@@ -9,6 +9,8 @@ const OrderItem = sequelize.define(
     orderId: { type: DataTypes.INTEGER, allowNull: false },
     productId: { type: DataTypes.INTEGER, allowNull: false },
     productName: { type: DataTypes.STRING },
+    variantId: { type: DataTypes.INTEGER, allowNull: true },
+    variantLabel: { type: DataTypes.STRING, allowNull: true },
     quantity: { type: DataTypes.INTEGER, allowNull: false, validate: { min: 1 } },
     price: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
     unit: { type: DataTypes.STRING },
