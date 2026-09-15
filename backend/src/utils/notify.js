@@ -11,31 +11,34 @@ async function notifyUser(userId, { type, title, message, orderId = null }) {
 }
 
 // Tells every connected client (any shopkeeper currently browsing the
-// catalog) that a product's stock changed, so lists update live without a
-// page refresh. `product` is the up-to-date Sequelize instance.
-function broadcastStockUpdate(product) {
+// catalog) that a product's — or a specific variant's — stock changed, so
+// lists update live without a page refresh.
+// `entry`: { productId, variantId (null for a non-variant product), stock, wholesalerId }
+function broadcastStockUpdate(entry) {
   broadcast('product_stock_updated', {
-    productId: product.id,
-    stock: product.stock,
-    wholesalerId: product.wholesalerId,
+    productId: entry.productId,
+    variantId: entry.variantId ?? null,
+    stock: entry.stock,
+    wholesalerId: entry.wholesalerId,
   });
 }
 
-// Checks a product's stock after a change and, if it crossed into "out of
-// stock" or "low stock", alerts the wholesaler. Call this right after any
-// save that changes `stock`.
-async function checkStockAndAlertWholesaler(product) {
-  if (product.stock === 0) {
-    await notifyUser(product.wholesalerId, {
+// Checks stock after a change and, if it crossed into "out of stock" or
+// "low stock", alerts the wholesaler. Call this right after any save that
+// changes stock — for a product or one of its variants.
+// `entry`: { wholesalerId, stock, lowStockThreshold, displayName, unit }
+async function checkStockAndAlertWholesaler(entry) {
+  if (entry.stock === 0) {
+    await notifyUser(entry.wholesalerId, {
       type: 'stock_out',
       title: 'Out of stock',
-      message: `${product.name} is now out of stock.`,
+      message: `${entry.displayName} is now out of stock.`,
     });
-  } else if (product.stock <= product.lowStockThreshold) {
-    await notifyUser(product.wholesalerId, {
+  } else if (entry.stock <= entry.lowStockThreshold) {
+    await notifyUser(entry.wholesalerId, {
       type: 'stock_low',
       title: 'Running low on stock',
-      message: `${product.name} has only ${product.stock} ${product.unit}(s) left.`,
+      message: `${entry.displayName} has only ${entry.stock} ${entry.unit}(s) left.`,
     });
   }
 }
