@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
 import {
   Search, Plus, Pencil, Trash2, ShoppingCart, X, CheckCircle2, AlertTriangle, PackageOpen,
-  Carrot, Apple, Milk, Wheat, Flame, CupSoda, Popcorn, Package,
+  Carrot, Apple, Milk, Wheat, Flame, CupSoda, Popcorn, Package, Star,
 } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 import { useAuth } from '../context/AuthContext';
@@ -24,6 +24,8 @@ const categoryIcon = (cat) => {
   return map[cat] || Package;
 };
 
+const emptyVariant = () => ({ _key: Math.random().toString(36).slice(2), label: '', price: '', stock: '', minOrderQty: 1 });
+
 // ---- Wholesaler: Add/Edit Product Modal ----
 const ProductModal = ({ product, onClose, onSave }) => {
   const [form, setForm] = useState({
@@ -32,15 +34,27 @@ const ProductModal = ({ product, onClose, onSave }) => {
     price: product?.price || '',
     stock: product?.stock || '',
     lowStockThreshold: product?.lowStockThreshold ?? 5,
+    minOrderQty: product?.minOrderQty ?? 1,
     unit: product?.unit || 'piece',
+    packSize: product?.packSize || '',
     category: product?.category || 'General',
   });
+  const [variants, setVariants] = useState(
+    product?.variants?.length
+      ? product.variants.map((v) => ({ _key: v.id, label: v.label, price: v.price, stock: v.stock, minOrderQty: v.minOrderQty }))
+      : []
+  );
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(product?.image || '');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+
+  const updateVariant = (key, field, value) =>
+    setVariants(variants.map((v) => (v._key === key ? { ...v, [field]: value } : v)));
+  const addVariant = () => setVariants([...variants, emptyVariant()]);
+  const removeVariant = (key) => setVariants(variants.filter((v) => v._key !== key));
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -65,6 +79,14 @@ const ProductModal = ({ product, onClose, onSave }) => {
     try {
       const data = new FormData();
       Object.entries(form).forEach(([key, value]) => data.append(key, value));
+      data.append(
+        'variants',
+        JSON.stringify(
+          variants
+            .filter((v) => v.label.trim() && v.price !== '')
+            .map(({ label, price, stock, minOrderQty }) => ({ label: label.trim(), price, stock, minOrderQty }))
+        )
+      );
       if (imageFile) {
         data.append('image', imageFile);
       } else if (product && !imagePreview) {
@@ -126,6 +148,31 @@ const ProductModal = ({ product, onClose, onSave }) => {
             <input className="form-input" name="lowStockThreshold" type="number" value={form.lowStockThreshold} onChange={handleChange} placeholder="5" min="0" />
             <p className="mt-1 text-xs text-slate-400">You'll get an alert when stock drops to this number or below.</p>
           </div>
+          <div>
+            <label className="form-label">Minimum order quantity</label>
+            <input className="form-input" name="minOrderQty" type="number" value={form.minOrderQty} onChange={handleChange} placeholder="1" min="1" />
+            <p className="mt-1 text-xs text-slate-400">Shopkeepers must order at least this many {form.unit}s.</p>
+          </div>
+          <div>
+            <div className="flex items-center justify-between">
+              <label className="form-label !mb-0">Pack sizes / variants (optional)</label>
+              <button type="button" className="text-xs font-semibold text-leaf-700" onClick={addVariant}>+ Add size</button>
+            </div>
+            <p className="mb-2 mt-1 text-xs text-slate-400">
+              List this product in multiple pack sizes (e.g. 250g, 500g, 1kg), each with its own price and stock, instead of the single price/stock above.
+            </p>
+            {variants.map((v) => (
+              <div key={v._key} className="mb-2 grid grid-cols-[1.2fr_1fr_1fr_1fr_auto] gap-2">
+                <input className="form-input" placeholder="Label (e.g. 500g)" value={v.label} onChange={(e) => updateVariant(v._key, 'label', e.target.value)} />
+                <input className="form-input" type="number" placeholder="Price" min="0" value={v.price} onChange={(e) => updateVariant(v._key, 'price', e.target.value)} />
+                <input className="form-input" type="number" placeholder="Stock" min="0" value={v.stock} onChange={(e) => updateVariant(v._key, 'stock', e.target.value)} />
+                <input className="form-input" type="number" placeholder="Min qty" min="1" value={v.minOrderQty} onChange={(e) => updateVariant(v._key, 'minOrderQty', e.target.value)} />
+                <button type="button" className="text-slate-400 hover:text-red-600" onClick={() => removeVariant(v._key)}>
+                  <X size={16} />
+                </button>
+              </div>
+            ))}
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="form-label">Unit</label>
@@ -154,6 +201,11 @@ const ProductModal = ({ product, onClose, onSave }) => {
               </select>
             </div>
           </div>
+          <div>
+            <label className="form-label">Quantity (e.g. 100gm, 1kg, 1packet)</label>
+            <input className="form-input" name="packSize" value={form.packSize} onChange={handleChange} placeholder="e.g. 500gm" />
+            <p className="mt-1 text-xs text-slate-400">This is shown on the product card, separate from the unit used for stock/pricing above.</p>
+          </div>
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" className="btn-outline" onClick={onClose}>Cancel</button>
             <button type="submit" className="btn-primary" disabled={saving}>
@@ -169,21 +221,35 @@ const ProductModal = ({ product, onClose, onSave }) => {
 // ---- Shopkeeper: Place Order Modal ----
 const OrderModal = ({ product, onClose }) => {
   const { user } = useAuth();
-  const [qty, setQty] = useState(1);
+  const hasVariants = product.variants && product.variants.length > 0;
+  // null = the product's own default price/stock; a number = a specific variant.
+  // Defaulting to null means the base listing is what's shown/selected first,
+  // with variants offered as additional options rather than replacing it.
+  const [variantId, setVariantId] = useState(null);
+  const selected = variantId ? product.variants.find((v) => v.id === variantId) : product;
+
+  const [qty, setQty] = useState(selected?.minOrderQty || 1);
   const [note, setNote] = useState('');
   const [address, setAddress] = useState(user?.address || '');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
 
+  // Reset quantity to the new selection's minimum whenever the chosen variant changes
+  useEffect(() => {
+    setQty(selected?.minOrderQty || 1);
+  }, [variantId]);
+
   const handleOrder = async () => {
-    if (qty < 1) return setError('Quantity must be at least 1');
+    if (qty < (selected?.minOrderQty || 1)) {
+      return setError(`Minimum order quantity is ${selected.minOrderQty} ${product.unit}(s)`);
+    }
     if (!address.trim()) return setError('Delivery address is required');
     setLoading(true);
     setError('');
     try {
       await API.post('/orders', {
-        items: [{ productId: product.id, quantity: Number(qty) }],
+        items: [{ productId: product.id, variantId: variantId || undefined, quantity: Number(qty) }],
         wholesalerId: product.wholesaler?.id || product.wholesalerId,
         deliveryAddress: address,
         note,
@@ -208,9 +274,25 @@ const OrderModal = ({ product, onClose }) => {
           </div>
         ) : (
           <>
-            <h3 className="text-lg font-semibold text-slate-900">Place Order — {product.name}</h3>
-            <p className="mb-4 mt-1 text-sm text-slate-500">
-              ₹{product.price} per {product.unit} · Available: {product.stock} {product.unit}s
+            <div className="mb-4 flex items-start gap-3">
+              {product.image && (
+                <img src={product.image} alt={product.name} className="h-14 w-14 shrink-0 rounded-lg border border-slate-200 object-cover" />
+              )}
+              <div>
+                <h3 className="text-lg font-semibold leading-tight text-slate-900">{product.name}</h3>
+                <div className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
+                  <span>{product.wholesalerName}</span>
+                  {product.wholesalerRating?.averageRating != null && (
+                    <span className="flex items-center gap-0.5 text-amber-600">
+                      <Star size={11} fill="currentColor" /> {product.wholesalerRating.averageRating.toFixed(1)} ({product.wholesalerRating.reviewCount})
+                    </span>
+                  )}
+                </div>
+                {product.description && <p className="mt-1 text-xs text-slate-400">{product.description}</p>}
+              </div>
+            </div>
+            <p className="mb-4 text-sm text-slate-500">
+              ₹{selected?.price} per {product.unit} · Available: {selected?.stock} {product.unit}s · Min order: {selected?.minOrderQty} {product.unit}(s)
             </p>
             {error && (
               <p className="mb-3 flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
@@ -218,9 +300,35 @@ const OrderModal = ({ product, onClose }) => {
               </p>
             )}
             <div className="space-y-4">
+              {hasVariants && (
+                <div>
+                  <label className="form-label">Pack size</label>
+                  <select
+                    className="form-input"
+                    value={variantId ?? ''}
+                    onChange={(e) => setVariantId(e.target.value ? Number(e.target.value) : null)}
+                  >
+                    <option value="" disabled={product.stock === 0}>
+                      Default — ₹{product.price} {product.stock === 0 ? '(out of stock)' : ''}
+                    </option>
+                    {product.variants.map((v) => (
+                      <option key={v.id} value={v.id} disabled={v.stock === 0}>
+                        {v.label} — ₹{v.price} {v.stock === 0 ? '(out of stock)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="form-label">Quantity ({product.unit})</label>
-                <input className="form-input" type="number" min="1" max={product.stock} value={qty} onChange={(e) => setQty(e.target.value)} />
+                <input
+                  className="form-input"
+                  type="number"
+                  min={selected?.minOrderQty || 1}
+                  max={selected?.stock}
+                  value={qty}
+                  onChange={(e) => setQty(e.target.value)}
+                />
               </div>
               <div>
                 <label className="form-label">Delivery Address</label>
@@ -231,12 +339,12 @@ const OrderModal = ({ product, onClose }) => {
                 <input className="form-input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Any special instructions?" />
               </div>
               <div className="rounded-lg bg-leaf-50 px-4 py-3 text-sm font-semibold text-leaf-800">
-                Total: ₹{(product.price * qty).toFixed(2)}
+                Total: ₹{((selected?.price || 0) * qty).toFixed(2)}
               </div>
             </div>
             <div className="mt-5 flex justify-end gap-2">
               <button className="btn-outline" onClick={onClose}>Cancel</button>
-              <button className="btn-primary" onClick={handleOrder} disabled={loading}>
+              <button className="btn-primary" onClick={handleOrder} disabled={loading || selected?.stock === 0}>
                 {loading ? 'Placing...' : 'Confirm Order'}
               </button>
             </div>
@@ -278,8 +386,16 @@ const ProductsPage = () => {
   // and a wholesaler sees the count tick down in real time.
   useEffect(() => {
     const socket = io(SOCKET_URL);
-    socket.on('product_stock_updated', ({ productId, stock }) => {
-      setProducts((prev) => prev.map((p) => (p.id === productId ? { ...p, stock } : p)));
+    socket.on('product_stock_updated', ({ productId, variantId, stock }) => {
+      setProducts((prev) =>
+        prev.map((p) => {
+          if (p.id !== productId) return p;
+          if (variantId) {
+            return { ...p, variants: p.variants?.map((v) => (v.id === variantId ? { ...v, stock } : v)) };
+          }
+          return { ...p, stock };
+        })
+      );
     });
     return () => socket.disconnect();
   }, []);
@@ -347,34 +463,44 @@ const ProductsPage = () => {
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filtered.map((product) => {
               const CatIcon = categoryIcon(product.category);
+              const hasVariants = product.variants && product.variants.length > 0;
+              // The base product is always a sellable option in its own right —
+              // variants are *additional* options, not a replacement for it.
+              const stockUnits = [
+                { stock: product.stock, threshold: product.lowStockThreshold },
+                ...(product.variants || []).map((v) => ({ stock: v.stock, threshold: v.lowStockThreshold })),
+              ];
+              const outOfStock = stockUnits.every((u) => u.stock === 0);
+              const lowStock = !outOfStock && stockUnits.some((u) => u.stock > 0 && u.stock <= u.threshold);
+              const displayPrice = hasVariants
+                ? Math.min(product.price, ...product.variants.map((v) => v.price))
+                : product.price;
               return (
                 <div className="card overflow-hidden !p-0" key={product.id}>
-                  <div className="flex h-36 items-center justify-center bg-leaf-50 text-leaf-500">
+                  <div className="relative flex h-36 items-center justify-center bg-leaf-50 text-leaf-500">
                     {product.image ? (
                       <img src={product.image} alt={product.name} className="h-full w-full object-cover" />
                     ) : (
                       <CatIcon size={44} strokeWidth={1.5} />
                     )}
+                    <span className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-semibold text-leaf-700 shadow-sm backdrop-blur-sm">
+                      <CatIcon size={11} /> {product.category}
+                    </span>
                   </div>
                   <div className="p-4">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="font-semibold text-slate-900">{product.name}</div>
-                      {isWholesaler && product.stock === 0 && (
-                        <span className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700">Out of stock</span>
-                      )}
-                      {isWholesaler && product.stock > 0 && product.stock <= product.lowStockThreshold && (
-                        <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Low stock</span>
-                      )}
+                    <div className="font-semibold text-slate-900">{product.name}</div>
+                    {product.packSize && (
+                      <div className="text-xs text-slate-400">{product.packSize}</div>
+                    )}
+                    <div className="mt-1 text-base font-bold text-leaf-700">
+                      {hasVariants ? `From ₹${displayPrice}` : `₹${displayPrice}`}
+                      <span className="text-xs font-normal text-slate-400"> / {product.unit}</span>
                     </div>
-                    <div className="text-sm font-semibold text-leaf-700">₹{product.price} / {product.unit}</div>
-                    <div className="mt-1 text-xs text-slate-500">
-                      Stock: {product.stock} {product.unit}s
-                      {!isWholesaler && <span> · {product.wholesalerName}</span>}
-                    </div>
-                    <div className="mt-1 text-xs text-slate-400">
-                      {product.category}
-                      {product.description && <div className="mt-1">{product.description}</div>}
-                    </div>
+                    {isWholesaler && (outOfStock || lowStock) && (
+                      <span className={`mt-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${outOfStock ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {outOfStock ? 'Out of stock' : 'Low stock'}
+                      </span>
+                    )}
                     <div className="mt-3 flex gap-2">
                       {isWholesaler ? (
                         <>
@@ -389,9 +515,9 @@ const ProductsPage = () => {
                         <button
                           className="btn-primary w-full px-3 py-1.5 text-xs"
                           onClick={() => setOrderProduct(product)}
-                          disabled={product.stock === 0}
+                          disabled={outOfStock}
                         >
-                          {product.stock === 0 ? 'Out of Stock' : (<><ShoppingCart size={13} /> Order Now</>)}
+                          {outOfStock ? 'Out of Stock' : (<><ShoppingCart size={13} /> Order Now</>)}
                         </button>
                       )}
                     </div>
