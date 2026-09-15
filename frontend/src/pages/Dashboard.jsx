@@ -23,6 +23,8 @@ const statusClass = {
   Rejected: 'bg-red-50 text-red-600',
   Dispatched: 'bg-indigo-50 text-indigo-600',
   Delivered: 'bg-emerald-50 text-emerald-700',
+  Disputed: 'bg-orange-50 text-orange-600',
+  Returned: 'bg-slate-100 text-slate-600',
 };
 
 const statusDotClass = {
@@ -31,6 +33,8 @@ const statusDotClass = {
   Rejected: 'bg-red-500',
   Dispatched: 'bg-indigo-500',
   Delivered: 'bg-emerald-600',
+  Disputed: 'bg-orange-500',
+  Returned: 'bg-slate-400',
 };
 
 const Dashboard = () => {
@@ -52,20 +56,14 @@ const Dashboard = () => {
           isWholesaler
             ? API.get('/products/my')
             : API.get('/products'),
+          isWholesaler ? API.get('/analytics/wholesaler') : API.get('/analytics/shopkeeper'),
         ];
-
-        if (isWholesaler) {
-          calls.push(API.get('/analytics/wholesaler'));
-        }
 
         const results = await Promise.all(calls);
 
         setOrders(results[0].data);
         setProducts(results[1].data);
-
-        if (isWholesaler) {
-          setAnalytics(results[2].data);
-        }
+        setAnalytics(results[2].data);
       } catch (err) {
         console.error('Dashboard load error:', err);
       } finally {
@@ -234,228 +232,9 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* WHOLESALER DASHBOARD */}
-        {isWholesaler ? (
-          !loading &&
-          analytics && (
-            <>
-
-              {/* REVENUE + ORDER STATUS */}
-              <div className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-3">
-
-                {/* REVENUE */}
-                <div className="card border border-slate-200 bg-white lg:col-span-2">
-
-                  <h2 className="mb-5 text-base font-semibold text-[#111A2E]">
-                    Revenue — last 14 days
-                  </h2>
-
-                  {!hasSales ? (
-                    <div className="py-16 text-center text-[#94A3B8]">
-
-                      <BarChart3
-                        className="mx-auto mb-2"
-                        size={30}
-                      />
-
-                      No delivered orders in this period yet
-
-                    </div>
-                  ) : (
-                    <div className="flex h-44 items-end gap-2">
-
-                      {analytics.salesByDay.map((d) => (
-
-                        <div
-                          key={d.date}
-                          className="flex flex-1 flex-col items-center gap-1.5"
-                        >
-
-                          <div className="w-full text-center text-[10px] font-medium text-[#94A3B8]">
-                            {d.revenue > 0
-                              ? `₹${d.revenue.toFixed(0)}`
-                              : ''}
-                          </div>
-
-                          <div
-                            className="w-full rounded-t-md bg-[#D45B2F] transition-all"
-                            style={{
-                              height: `${Math.max(
-                                4,
-                                (d.revenue /
-                                  maxRevenue) *
-                                  130
-                              )}px`,
-                            }}
-                            title={`₹${d.revenue.toFixed(
-                              0
-                            )} across ${
-                              d.orders
-                            } order(s)`}
-                          />
-
-                          <div className="text-[10px] text-[#94A3B8]">
-                            {new Date(
-                              d.date
-                            ).toLocaleDateString(
-                              'en-IN',
-                              {
-                                day: '2-digit',
-                                month: 'short',
-                              }
-                            )}
-                          </div>
-
-                        </div>
-
-                      ))}
-
-                    </div>
-                  )}
-
-                </div>
-
-                {/* ORDER STATUS */}
-                <div className="card border border-slate-200 bg-white">
-
-                  <h2 className="mb-5 text-base font-semibold text-[#111A2E]">
-                    Order status
-                  </h2>
-
-                  {Object.keys(
-                    analytics.statusCounts
-                  ).length === 0 ? (
-
-                    <p className="text-sm text-[#94A3B8]">
-                      No orders yet
-                    </p>
-
-                  ) : (
-
-                    <div className="space-y-3">
-
-                      {Object.entries(
-                        analytics.statusCounts
-                      ).map(
-                        ([status, count]) => (
-
-                          <div
-                            key={status}
-                            className="flex items-center justify-between text-sm"
-                          >
-
-                            <span className="flex items-center gap-2 text-[#64748B]">
-
-                              <span
-                                className={`h-2 w-2 rounded-full ${
-                                  statusDotClass[
-                                    status
-                                  ] ||
-                                  'bg-slate-400'
-                                }`}
-                              />
-
-                              {status}
-
-                            </span>
-
-                            <span className="font-semibold text-[#111A2E]">
-                              {count}
-                            </span>
-
-                          </div>
-
-                        )
-                      )}
-
-                    </div>
-
-                  )}
-
-                </div>
-
-              </div>
-
-              {/* TOP SELLING PRODUCTS */}
-              <div className="card border border-slate-200 bg-white">
-
-                <h2 className="mb-5 text-base font-semibold text-[#111A2E]">
-                  Top-selling products
-                </h2>
-
-                {analytics.topProducts.length ===
-                0 ? (
-
-                  <div className="py-10 text-center text-[#94A3B8]">
-
-                    <Package
-                      className="mx-auto mb-2"
-                      size={28}
-                    />
-
-                    No product sales yet
-
-                  </div>
-
-                ) : (
-
-                  <div className="space-y-4">
-
-                    {analytics.topProducts.map(
-                      (p) => (
-
-                        <div
-                          key={p.productId}
-                        >
-
-                          <div className="mb-1 flex items-center justify-between text-sm">
-
-                            <span className="font-medium text-[#111A2E]">
-                              {p.name}
-                            </span>
-
-                            <span className="text-[#64748B]">
-                              {p.quantity} units · ₹
-                              {p.revenue.toFixed(
-                                0
-                              )}
-                            </span>
-
-                          </div>
-
-                          <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-
-                            <div
-                              className="h-full rounded-full bg-[#D45B2F]"
-                              style={{
-                                width: `${
-                                  (p.quantity /
-                                    maxQty) *
-                                  100
-                                }%`,
-                              }}
-                            />
-
-                          </div>
-
-                        </div>
-
-                      )
-                    )}
-
-                  </div>
-
-                )}
-
-              </div>
-
-            </>
-          )
-
-        ) : (
-
-          /* SHOPKEEPER DASHBOARD */
-          <div className="card border border-slate-200 bg-white">
+        {/* SHOPKEEPER: RECENT ORDERS */}
+        {!isWholesaler && (
+          <div className="card mb-5 border border-slate-200 bg-white">
 
             <div className="mb-5 flex items-center justify-between">
 
@@ -595,8 +374,224 @@ const Dashboard = () => {
             )}
 
           </div>
-
         )}
+
+        {/* REVENUE/SPEND ANALYTICS — shown for both roles, relabeled */}
+        {!loading &&
+          analytics && (
+            <>
+
+              {/* REVENUE + ORDER STATUS */}
+              <div className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-3">
+
+                {/* REVENUE */}
+                <div className="card border border-slate-200 bg-white lg:col-span-2">
+
+                  <h2 className="mb-5 text-base font-semibold text-[#111A2E]">
+                    {isWholesaler ? 'Revenue' : 'Spend'} — last 14 days
+                  </h2>
+
+                  {!hasSales ? (
+                    <div className="py-16 text-center text-[#94A3B8]">
+
+                      <BarChart3
+                        className="mx-auto mb-2"
+                        size={30}
+                      />
+
+                      No delivered orders in this period yet
+
+                    </div>
+                  ) : (
+                    <div className="flex h-44 items-end gap-2">
+
+                      {analytics.salesByDay.map((d) => (
+
+                        <div
+                          key={d.date}
+                          className="flex flex-1 flex-col items-center gap-1.5"
+                        >
+
+                          <div className="w-full text-center text-[10px] font-medium text-[#94A3B8]">
+                            {d.revenue > 0
+                              ? `₹${d.revenue.toFixed(0)}`
+                              : ''}
+                          </div>
+
+                          <div
+                            className="w-full rounded-t-md bg-[#D45B2F] transition-all"
+                            style={{
+                              height: `${Math.max(
+                                4,
+                                (d.revenue /
+                                  maxRevenue) *
+                                  130
+                              )}px`,
+                            }}
+                            title={`₹${d.revenue.toFixed(
+                              0
+                            )} across ${
+                              d.orders
+                            } order(s)`}
+                          />
+
+                          <div className="text-[10px] text-[#94A3B8]">
+                            {new Date(
+                              d.date
+                            ).toLocaleDateString(
+                              'en-IN',
+                              {
+                                day: '2-digit',
+                                month: 'short',
+                              }
+                            )}
+                          </div>
+
+                        </div>
+
+                      ))}
+
+                    </div>
+                  )}
+
+                </div>
+
+                {/* ORDER STATUS */}
+                <div className="card border border-slate-200 bg-white">
+
+                  <h2 className="mb-5 text-base font-semibold text-[#111A2E]">
+                    Order status
+                  </h2>
+
+                  {Object.keys(
+                    analytics.statusCounts
+                  ).length === 0 ? (
+
+                    <p className="text-sm text-[#94A3B8]">
+                      No orders yet
+                    </p>
+
+                  ) : (
+
+                    <div className="space-y-3">
+
+                      {Object.entries(
+                        analytics.statusCounts
+                      ).map(
+                        ([status, count]) => (
+
+                          <div
+                            key={status}
+                            className="flex items-center justify-between text-sm"
+                          >
+
+                            <span className="flex items-center gap-2 text-[#64748B]">
+
+                              <span
+                                className={`h-2 w-2 rounded-full ${
+                                  statusDotClass[
+                                    status
+                                  ] ||
+                                  'bg-slate-400'
+                                }`}
+                              />
+
+                              {status}
+
+                            </span>
+
+                            <span className="font-semibold text-[#111A2E]">
+                              {count}
+                            </span>
+
+                          </div>
+
+                        )
+                      )}
+
+                    </div>
+
+                  )}
+
+                </div>
+
+              </div>
+
+              {/* TOP SELLING / MOST-ORDERED PRODUCTS */}
+              <div className="card border border-slate-200 bg-white">
+
+                <h2 className="mb-5 text-base font-semibold text-[#111A2E]">
+                  {isWholesaler ? 'Top-selling products' : 'Most-ordered products'}
+                </h2>
+
+                {analytics.topProducts.length ===
+                0 ? (
+
+                  <div className="py-10 text-center text-[#94A3B8]">
+
+                    <Package
+                      className="mx-auto mb-2"
+                      size={28}
+                    />
+
+                    No product sales yet
+
+                  </div>
+
+                ) : (
+
+                  <div className="space-y-4">
+
+                    {analytics.topProducts.map(
+                      (p) => (
+
+                        <div
+                          key={p.productId}
+                        >
+
+                          <div className="mb-1 flex items-center justify-between text-sm">
+
+                            <span className="font-medium text-[#111A2E]">
+                              {p.name}
+                            </span>
+
+                            <span className="text-[#64748B]">
+                              {p.quantity} units · ₹
+                              {p.revenue.toFixed(
+                                0
+                              )}
+                            </span>
+
+                          </div>
+
+                          <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+
+                            <div
+                              className="h-full rounded-full bg-[#D45B2F]"
+                              style={{
+                                width: `${
+                                  (p.quantity /
+                                    maxQty) *
+                                  100
+                                }%`,
+                              }}
+                            />
+
+                          </div>
+
+                        </div>
+
+                      )
+                    )}
+
+                  </div>
+
+                )}
+
+              </div>
+
+            </>
+          )}
 
       </div>
     </div>
