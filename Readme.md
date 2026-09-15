@@ -23,6 +23,21 @@ involved than a standard shop.
 - **Order management** — place orders and track them through a real status
   flow: `Pending → Accepted / Rejected → Dispatched → Delivered`, with an
   itemized order-detail view
+- **Order editing** — a shopkeeper can adjust item quantities, remove
+  items, or add other products from the same wholesaler's catalog to a
+  still-`Pending` order (stock is released and re-reserved against the
+  final set of items), instead of having to cancel and re-place it
+- **Minimum order quantity** — wholesalers can require a minimum quantity
+  per product (or per pack size), enforced at checkout and on edits
+- **Product variants** — a single product can be listed in multiple pack
+  sizes (e.g. 250g / 500g / 1kg), each with its own price, stock, and
+  minimum order quantity, instead of needing a separate listing per size
+- **Wholesaler ratings** — after a `Delivered` order, a shopkeeper can leave
+  a 1–5 star rating (one per order); the aggregate rating shows on every
+  product card in the catalog
+- **Dispute / return flow** — a shopkeeper can report an issue (wrong item,
+  damaged goods) on a `Delivered` order, which the wholesaler resolves by
+  dismissing it or accepting a return (which restocks the items)
 - **Real-time notifications** — the moment an order is placed or its status
   changes, the other party gets notified instantly (Socket.IO), with a
   notification center showing unread counts and history
@@ -31,9 +46,10 @@ involved than a standard shop.
   rejected order restores it. Every connected client sees stock levels
   update instantly, and wholesalers get an automatic alert when a product
   hits their configured low-stock threshold or runs out entirely
-- **Wholesaler analytics** — revenue summary, average order value, order
-  status breakdown, a 14-day revenue trend, and a top-selling-products
-  breakdown, shown right on the dashboard
+- **Analytics for both roles** — wholesalers see a revenue summary, order
+  status breakdown, 14-day revenue trend, and top-selling products;
+  shopkeepers see the same shape of data for their own spend and
+  most-ordered products, all on the dashboard
 - **Real-time chat** — Socket.IO messaging between a shopkeeper and
   wholesaler, with a contacts list and unread badges
 - **Profile management** — edit account details and change password
@@ -61,11 +77,12 @@ grocify/
 ├── backend/
 │   └── src/
 │       ├── config/db.js          # Sequelize connection
-│       ├── models/               # User, Product, Order, OrderItem, Message, Notification
-│       ├── routes/               # auth, products, orders, chat, profile, notifications, analytics
+│       ├── models/               # User, Product, ProductVariant, Order, OrderItem, Message, Notification, Review
+│       ├── routes/               # auth, products, orders, reviews, chat, profile, notifications, analytics
 │       ├── middleware/           # auth, upload (multer), validate
 │       ├── utils/notify.js       # creates + pushes notifications over sockets
 │       ├── socket.js             # Socket.IO connection + online-user tracking
+│       ├── migrations/           # hand-run SQL for schema changes made after initial sync
 │       ├── uploads/              # uploaded product images
 │       └── server.js
 └── frontend/
@@ -95,15 +112,17 @@ production, replace this with proper Sequelize migrations.
 
 > **Note:** `sequelize.sync()` only creates tables that don't exist yet — it
 > never alters an existing table to match model changes. If you're updating
-> an existing database rather than starting fresh, run any new-column
-> migrations by hand, e.g. for the low-stock-threshold field added to
-> `Product`:
+> an existing database rather than starting fresh, run the SQL files under
+> `backend/migrations/` by hand, in order, e.g.:
 > ```sql
 > ALTER TABLE products ADD COLUMN low_stock_threshold INT NOT NULL DEFAULT 5;
 > ```
 > (Column names are `snake_case` — the models use Sequelize's `underscored`
 > option, so a model field like `lowStockThreshold` maps to
-> `low_stock_threshold` in MySQL.)
+> `low_stock_threshold` in MySQL.) See
+> `backend/migrations/002_order_editing_variants_reviews_disputes.sql` for
+> the migration covering order editing, minimum order quantity, product
+> variants, reviews, and the dispute/return flow.
 
 ### 2. Configure environment variables
 
@@ -154,19 +173,22 @@ All routes are prefixed with `/api`. 🔒 = requires a JWT
 ### Products
 | Method | Endpoint            | Description                              |
 |--------|-----------------------|--------------------------------------------|
-| GET    | `/products` 🔒        | List all products                        |
+| GET    | `/products` 🔒        | List all products, with each wholesaler's average rating attached |
 | GET    | `/products/my` 🔒🏪    | List the logged-in wholesaler's products |
-| POST   | `/products` 🔒🏪       | Add a product (multipart, image upload)  |
-| PUT    | `/products/:id` 🔒🏪   | Update a product                         |
-| DELETE | `/products/:id` 🔒🏪   | Delete a product                         |
+| POST   | `/products` 🔒🏪       | Add a product (multipart, image upload; optionally include `variants`, a JSON array of pack sizes) |
+| PUT    | `/products/:id` 🔒🏪   | Update a product (replaces its variant set if `variants` is included) |
+| DELETE | `/products/:id` 🔒🏪   | Delete a product (cascades to its variants) |
 
 ### Orders
 | Method | Endpoint                  | Description                                |
 |--------|------------------------------|-----------------------------------------------|
-| POST   | `/orders` 🔒🧑‍🌾            | Place an order (transaction; row-locks and decrements stock, broadcasts the new stock level, alerts the wholesaler if it's now low/out) |
+| POST   | `/orders` 🔒🧑‍🌾            | Place an order (transaction; row-locks and decrements stock — for a specific variant if `variantId` is given — enforces minimum order quantity, broadcasts the new stock level, and alerts the wholesaler if it's now low/out) |
 | GET    | `/orders/my` 🔒              | List the logged-in user's orders             |
 | GET    | `/orders/:id` 🔒             | Get order detail (items, addresses, etc.)    |
+| PUT    | `/orders/:id/items` 🔒🧑‍🌾   | Edit item quantities on a still-`Pending` order — releases the old stock reservation and re-reserves against the new quantities |
 | PUT    | `/orders/:id/status` 🔒🏪    | Update order status — triggers a notification; a `Rejected` status restores the reserved stock |
+| PUT    | `/orders/:id/dispute` 🔒🧑‍🌾 | Report an issue on a `Delivered` order, moving it to `Disputed` |
+| PUT    | `/orders/:id/resolve-dispute` 🔒🏪 | Resolve a `Disputed` order — `Delivered` (dismiss) or `Returned` (accept the return and restock the items) |
 
 ### Notifications
 | Method | Endpoint                      | Description                        |
@@ -179,7 +201,15 @@ All routes are prefixed with `/api`. 🔒 = requires a JWT
 ### Analytics
 | Method | Endpoint                  | Description                                              |
 |--------|------------------------------|--------------------------------------------------------------|
-| GET    | `/analytics/wholesaler` 🔒🏪 | Revenue summary, status breakdown, top products, 14-day trend |
+| GET    | `/analytics/wholesaler` 🔒🏪 | Revenue summary, status breakdown, top-selling products, 14-day revenue trend |
+| GET    | `/analytics/shopkeeper` 🔒🧑‍🌾 | Spend summary, status breakdown, most-ordered products, 14-day spend trend — same shape as the wholesaler endpoint, scoped to the shopkeeper's own orders |
+
+### Reviews
+| Method | Endpoint                      | Description                                    |
+|--------|----------------------------------|----------------------------------------------------|
+| POST   | `/reviews` 🔒🧑‍🌾               | Rate the wholesaler for a `Delivered` order (1–5 stars, one review per order) |
+| GET    | `/reviews/wholesaler/:id` 🔒     | Get a wholesaler's average rating and review list |
+| GET    | `/reviews/order/:orderId` 🔒     | Check whether a specific order already has a review |
 
 ### Chat
 | Method | Endpoint                | Description                          |
@@ -199,28 +229,44 @@ All routes are prefixed with `/api`. 🔒 = requires a JWT
 ## Data Model
 
 - **User** — name, email, mobile, address, businessName, role (`shopkeeper` \| `wholesaler`), hashed password
-- **Product** — name, description, image, price, stock, lowStockThreshold, unit, category, belongs to a wholesaler (User)
-- **Order** — belongs to a shopkeeper and a wholesaler, status, deliveryAddress, note, totalAmount, has many OrderItems
-- **OrderItem** — belongs to an Order and a Product; stores quantity and price *at the time of the order*, so later price changes don't rewrite history
+- **Product** — name, description, image, price, stock, lowStockThreshold, minOrderQty, unit, category, belongs to a wholesaler (User), has many ProductVariants
+- **ProductVariant** — a pack size of a product (e.g. "500g"), each with its own price, stock, lowStockThreshold, and minOrderQty
+- **Order** — belongs to a shopkeeper and a wholesaler, status (including `Disputed`/`Returned`), disputeReason, deliveryAddress, note, totalAmount, has many OrderItems
+- **OrderItem** — belongs to an Order and a Product (and optionally a specific ProductVariant); stores quantity and price *at the time of the order*, so later price changes don't rewrite history
+- **Review** — one per delivered Order; a shopkeeper's rating (1–5) and comment on the wholesaler
 - **Message** — sender, receiver, text, timestamp
 - **Notification** — belongs to a user, type, title, message, linked orderId, read/unread
 
 Order placement runs inside a **Sequelize transaction** — if any item write
-fails, the whole order rolls back. Both order placement and status updates
-trigger a real-time notification to the other party via Socket.IO.
+fails, the whole order rolls back. Order placement, edits, and status
+changes all trigger a real-time notification to the other party via
+Socket.IO.
 
 ### Stock lifecycle
 
-- **Placing an order** row-locks each product (`SELECT ... FOR UPDATE`
-  within the transaction), verifies sufficient stock, and decrements it —
-  so stock is reserved immediately rather than only checked at
-  fulfillment, and two concurrent orders can't both succeed on the same
+- **Placing an order** row-locks each product — or the specific variant, if
+  `variantId` is given — (`SELECT ... FOR UPDATE` within the transaction),
+  checks the quantity against `minOrderQty`, verifies sufficient stock, and
+  decrements it — so stock is reserved immediately rather than only checked
+  at fulfillment, and two concurrent orders can't both succeed on the same
   last units.
-- **Rejecting an order** restores the quantities it had reserved.
+- **Editing a `Pending` order** releases everything the original order had
+  reserved, then re-reserves against the new quantities — in one
+  transaction, so a failed edit never leaves stock in a half-updated state.
+- **Rejecting an order**, or a wholesaler **accepting a return** on a
+  disputed order, restores the quantities that were reserved.
 - After any stock change, a `product_stock_updated` Socket.IO event is
-  broadcast to all connected clients, and the wholesaler receives a
-  notification if the product is now at or below `lowStockThreshold`
-  (default 5) or at zero.
+  broadcast to all connected clients (including which variant, if
+  applicable), and the wholesaler receives a notification if the
+  product/variant is now at or below its `lowStockThreshold` (default 5) or
+  at zero.
+
+### Dispute / return flow
+
+A `Delivered` order can be moved to `Disputed` by the shopkeeper (with a
+reason), which notifies the wholesaler. The wholesaler then resolves it:
+back to `Delivered` (dismissed) or to `Returned` (accepted — which restocks
+the items via the same release logic as a rejection).
 
 ## Future Scope
 
