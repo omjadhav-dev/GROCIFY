@@ -1,0 +1,7 @@
+{
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://grocify-production-6f44.up.railway.app/api/:path*" },
+    { "source": "/uploads/:path*", "destination": "https://grocify-production-6f44.up.railway.app/uploads/:path*" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
