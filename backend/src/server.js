@@ -11,6 +11,8 @@ const { sequelize } = require('./models');
 const { initSocket } = require('./socket');
 
 const app = express();
+const helmet = require('helmet');
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 const server = http.createServer(app);
 
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';

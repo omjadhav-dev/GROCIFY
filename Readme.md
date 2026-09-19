@@ -273,7 +273,3 @@ the items via the same release logic as a rejection).
 - [ ] **Smart reorder suggestions for shopkeepers** — track each shopkeeper's past orders per product to learn their typical reorder interval (e.g. rice every ~12 days), then proactively prompt them ("you're due to reorder rice") before they run out, instead of waiting for them to notice and search manually
 - [ ] **Price/demand anomaly detection** — compare a wholesaler's listed price against others in the same category to flag ones that are unusually high or low, and monitor order volume per product to catch sudden spikes (e.g. hoarding ahead of a festival) so wholesalers can react to demand shifts early
 - [ ] **AI assistant over the existing chat infrastructure** — extend `chatRoutes.js`/the `Message` model so shopkeepers can ask natural-language questions ("which wholesalers have onions in stock") and get an answer pulled from the live product catalog, instead of manually browsing or messaging each wholesaler
-
-## License
-
-This project is available for personal and academic use.
