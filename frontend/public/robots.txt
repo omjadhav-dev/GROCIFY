@@ -6,4 +6,4 @@ Disallow: /orders
 Disallow: /chat
 Disallow: /profile
 
-Sitemap: https://YOUR-SITE.vercel.app/sitemap.xml
+Sitemap: https://grocify-five-omega.vercel.app/sitemap.xml
