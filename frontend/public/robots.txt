@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /products
+Disallow: /orders
+Disallow: /chat
+Disallow: /profile
+
+Sitemap: https://YOUR-SITE.vercel.app/sitemap.xml
