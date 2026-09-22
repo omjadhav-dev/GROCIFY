@@ -10,13 +10,21 @@ const validate = require('../middleware/validate');
 const sequelize = require('../config/db');
 
 const deleteImageFile = (imagePath) => {
-  if (!imagePath || !imagePath.startsWith('/uploads/')) return;
-  const fullPath = path.join(__dirname, '..', imagePath);
-  fs.unlink(fullPath, (err) => {
-    if (err && err.code !== 'ENOENT') console.error('Failed to delete old image:', err.message);
-  });
-};
+  const cloudinary = require('cloudinary').v2;
 
+const deleteImageFile = async (imageUrl) => {
+  if (!imageUrl || !imageUrl.includes('cloudinary')) return;
+  try {
+    // Extract public_id from the URL
+    const parts = imageUrl.split('/');
+    const filename = parts[parts.length - 1].split('.')[0];
+    const folder = parts[parts.length - 2];
+    await cloudinary.uploader.destroy(`${folder}/${filename}`);
+  } catch (err) {
+    console.error('Cloudinary delete failed:', err.message);
+  }
+};
+}
 // Parses the `variants` field sent alongside a product form (a JSON string,
 // since this is a multipart/form-data request). Returns [] on anything
 // invalid/empty rather than throwing, since variants are optional.
