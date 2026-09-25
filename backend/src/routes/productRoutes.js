@@ -9,11 +9,13 @@ const upload = require('../middleware/upload');
 const validate = require('../middleware/validate');
 const sequelize = require('../config/db');
 
-const cloudinary = require('cloudinary').v2;
+const deleteImageFile = (imagePath) => {
+  const cloudinary = require('cloudinary').v2;
 
 const deleteImageFile = async (imageUrl) => {
   if (!imageUrl || !imageUrl.includes('cloudinary')) return;
   try {
+    // Extract public_id from the URL
     const parts = imageUrl.split('/');
     const filename = parts[parts.length - 1].split('.')[0];
     const folder = parts[parts.length - 2];
@@ -22,6 +24,7 @@ const deleteImageFile = async (imageUrl) => {
     console.error('Cloudinary delete failed:', err.message);
   }
 };
+}
 // Parses the `variants` field sent alongside a product form (a JSON string,
 // since this is a multipart/form-data request). Returns [] on anything
 // invalid/empty rather than throwing, since variants are optional.
@@ -128,7 +131,7 @@ router.post(
     const { name, description, price, stock, lowStockThreshold, minOrderQty, unit, packSize, category, variants } = req.body;
     const t = await sequelize.transaction();
     try {
-      const image = req.file ? req.file.path : '';
+      const image = req.file ? `/uploads/${req.file.filename}` : '';
 
       const product = await Product.create(
         {
@@ -199,7 +202,7 @@ router.put('/:id', protect, wholesalerOnly, upload.single('image'), async (req, 
 
     if (req.file) {
       deleteImageFile(product.image);
-      product.image = req.file.path;
+      product.image = `/uploads/${req.file.filename}`;
     } else if (removeImage === 'true') {
       deleteImageFile(product.image);
       product.image = '';
