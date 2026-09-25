@@ -5,6 +5,8 @@ bulk with **shopkeepers** who need to stock their stores. Wholesalers list
 what they have, shopkeepers order what they need, and both sides track the
 order and chat through it in real time.
 
+![Grocify Landing Page](screenshots/landing.png)
+
 ## Why a marketplace, not a typical online store
 
 Most e-commerce projects are one seller selling to many buyers. Grocify is
@@ -14,15 +16,35 @@ a proper approval flow (a wholesaler can accept or reject before it's ever
 dispatched). That makes the data model and permissions meaningfully more
 involved than a standard shop.
 
+## Screenshots
+
+| Landing | Product Catalog |
+|---|---|
+| ![Landing](screenshots/landing.png) | ![Products](screenshots/products.png) |
+
+| Shopkeeper Dashboard | Real-time Chat |
+|---|---|
+| ![Dashboard](screenshots/dashboard.png) | ![Chat](screenshots/chat.png) |
+
+| Wholesaler — Incoming Orders |
+|---|
+| ![Orders](screenshots/orders.png) |
+
 ## Features
 
 - **Role-based accounts** — Shopkeeper and Wholesaler portals with separate
   dashboards and permissions, JWT-authenticated
 - **Product catalog** — wholesalers add, edit, and delete products (image
   upload, stock, pricing, category); shopkeepers search and browse
+
+  ![Product Catalog](screenshots/products.png)
+
 - **Order management** — place orders and track them through a real status
   flow: `Pending → Accepted / Rejected → Dispatched → Delivered`, with an
   itemized order-detail view
+
+  ![Incoming Orders](screenshots/orders.png)
+
 - **Order editing** — a shopkeeper can adjust item quantities, remove
   items, or add other products from the same wholesaler's catalog to a
   still-`Pending` order (stock is released and re-reserved against the
@@ -50,25 +72,27 @@ involved than a standard shop.
   status breakdown, 14-day revenue trend, and top-selling products;
   shopkeepers see the same shape of data for their own spend and
   most-ordered products, all on the dashboard
+
+  ![Shopkeeper Dashboard](screenshots/dashboard.png)
+
 - **Real-time chat** — Socket.IO messaging between a shopkeeper and
   wholesaler, with a contacts list and unread badges
+
+  ![Real-time Chat](screenshots/chat.png)
+
 - **Profile management** — edit account details and change password
 
 ## Tech Stack
 
-| Layer         | Technology                                                 |
+| Layer         | Technology                                                  |
 |---------------|-------------------------------------------------------------|
 | Frontend      | React 18 (Vite), React Router, Tailwind CSS, HTML5/CSS3, lucide-react icons |
-| Backend       | Node.js, Express.js                                        |
-| Database      | MySQL, via Sequelize ORM                                   |
-| Real-time     | Socket.IO (chat + live notifications)                      |
+| Backend       | Node.js, Express.js                                         |
+| Database      | MySQL, via Sequelize ORM                                    |
+| Real-time     | Socket.IO (chat + live notifications)                       |
 | Auth          | JWT (jsonwebtoken) + bcryptjs                               |
 | Validation    | express-validator                                           |
-| File uploads  | Multer (local disk storage)                                 |
-
-> **Note on image storage:** product images currently go through Multer to
-> local disk (`backend/src/uploads`), served as static files. There's no
-> Cloudinary (or other cloud storage) integration yet.
+| File uploads  | Cloudinary                                                  |
 
 ## Project Structure
 
@@ -79,11 +103,10 @@ grocify/
 │       ├── config/db.js          # Sequelize connection
 │       ├── models/               # User, Product, ProductVariant, Order, OrderItem, Message, Notification, Review
 │       ├── routes/               # auth, products, orders, reviews, chat, profile, notifications, analytics
-│       ├── middleware/           # auth, upload (multer), validate
+│       ├── middleware/           # auth, upload (multer + cloudinary), validate
 │       ├── utils/notify.js       # creates + pushes notifications over sockets
 │       ├── socket.js             # Socket.IO connection + online-user tracking
 │       ├── migrations/           # hand-run SQL for schema changes made after initial sync
-│       ├── uploads/              # uploaded product images
 │       └── server.js
 └── frontend/
     └── src/
@@ -139,6 +162,10 @@ DB_USER=root
 DB_PASSWORD=your_mysql_password
 
 JWT_SECRET=some_long_random_string
+
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
 ```
 
 ### 3. Install and run
@@ -165,66 +192,66 @@ All routes are prefixed with `/api`. 🔒 = requires a JWT
 (`Authorization: Bearer <token>`), 🏪 = wholesaler-only, 🧑‍🌾 = shopkeeper-only.
 
 ### Auth
-| Method | Endpoint          | Description        |
-|--------|--------------------|----------------------|
-| POST   | `/auth/register`   | Create an account   |
-| POST   | `/auth/login`      | Log in, returns JWT |
+| Method | Endpoint          | Description         |
+|--------|-------------------|---------------------|
+| POST   | `/auth/register`  | Create an account   |
+| POST   | `/auth/login`     | Log in, returns JWT |
 
 ### Products
-| Method | Endpoint            | Description                              |
-|--------|-----------------------|--------------------------------------------|
-| GET    | `/products` 🔒        | List all products, with each wholesaler's average rating attached |
-| GET    | `/products/my` 🔒🏪    | List the logged-in wholesaler's products |
-| POST   | `/products` 🔒🏪       | Add a product (multipart, image upload; optionally include `variants`, a JSON array of pack sizes) |
-| PUT    | `/products/:id` 🔒🏪   | Update a product (replaces its variant set if `variants` is included) |
-| DELETE | `/products/:id` 🔒🏪   | Delete a product (cascades to its variants) |
+| Method | Endpoint             | Description                              |
+|--------|----------------------|------------------------------------------|
+| GET    | `/products` 🔒       | List all products, with each wholesaler's average rating attached |
+| GET    | `/products/my` 🔒🏪  | List the logged-in wholesaler's products |
+| POST   | `/products` 🔒🏪     | Add a product (multipart, image upload; optionally include `variants`, a JSON array of pack sizes) |
+| PUT    | `/products/:id` 🔒🏪 | Update a product (replaces its variant set if `variants` is included) |
+| DELETE | `/products/:id` 🔒🏪 | Delete a product (cascades to its variants) |
 
 ### Orders
-| Method | Endpoint                  | Description                                |
-|--------|------------------------------|-----------------------------------------------|
-| POST   | `/orders` 🔒🧑‍🌾            | Place an order (transaction; row-locks and decrements stock — for a specific variant if `variantId` is given — enforces minimum order quantity, broadcasts the new stock level, and alerts the wholesaler if it's now low/out) |
-| GET    | `/orders/my` 🔒              | List the logged-in user's orders             |
-| GET    | `/orders/:id` 🔒             | Get order detail (items, addresses, etc.)    |
-| PUT    | `/orders/:id/items` 🔒🧑‍🌾   | Edit item quantities on a still-`Pending` order — releases the old stock reservation and re-reserves against the new quantities |
-| PUT    | `/orders/:id/status` 🔒🏪    | Update order status — triggers a notification; a `Rejected` status restores the reserved stock |
-| PUT    | `/orders/:id/dispute` 🔒🧑‍🌾 | Report an issue on a `Delivered` order, moving it to `Disputed` |
+| Method | Endpoint                           | Description                                |
+|--------|------------------------------------|--------------------------------------------|
+| POST   | `/orders` 🔒🧑‍🌾                  | Place an order (transaction; row-locks and decrements stock — for a specific variant if `variantId` is given — enforces minimum order quantity, broadcasts the new stock level, and alerts the wholesaler if it's now low/out) |
+| GET    | `/orders/my` 🔒                    | List the logged-in user's orders           |
+| GET    | `/orders/:id` 🔒                   | Get order detail (items, addresses, etc.)  |
+| PUT    | `/orders/:id/items` 🔒🧑‍🌾        | Edit item quantities on a still-`Pending` order — releases the old stock reservation and re-reserves against the new quantities |
+| PUT    | `/orders/:id/status` 🔒🏪          | Update order status — triggers a notification; a `Rejected` status restores the reserved stock |
+| PUT    | `/orders/:id/dispute` 🔒🧑‍🌾      | Report an issue on a `Delivered` order, moving it to `Disputed` |
 | PUT    | `/orders/:id/resolve-dispute` 🔒🏪 | Resolve a `Disputed` order — `Delivered` (dismiss) or `Returned` (accept the return and restock the items) |
 
 ### Notifications
-| Method | Endpoint                      | Description                        |
-|--------|----------------------------------|---------------------------------------|
-| GET    | `/notifications` 🔒               | List the logged-in user's notifications |
-| GET    | `/notifications/unread-count` 🔒  | Get just the unread count             |
-| PUT    | `/notifications/:id/read` 🔒      | Mark one notification as read         |
-| PUT    | `/notifications/read-all` 🔒      | Mark all as read                      |
+| Method | Endpoint                         | Description                              |
+|--------|----------------------------------|------------------------------------------|
+| GET    | `/notifications` 🔒              | List the logged-in user's notifications  |
+| GET    | `/notifications/unread-count` 🔒 | Get just the unread count                |
+| PUT    | `/notifications/:id/read` 🔒     | Mark one notification as read            |
+| PUT    | `/notifications/read-all` 🔒     | Mark all as read                         |
 
 ### Analytics
-| Method | Endpoint                  | Description                                              |
-|--------|------------------------------|--------------------------------------------------------------|
-| GET    | `/analytics/wholesaler` 🔒🏪 | Revenue summary, status breakdown, top-selling products, 14-day revenue trend |
+| Method | Endpoint                      | Description                                              |
+|--------|-------------------------------|----------------------------------------------------------|
+| GET    | `/analytics/wholesaler` 🔒🏪  | Revenue summary, status breakdown, top-selling products, 14-day revenue trend |
 | GET    | `/analytics/shopkeeper` 🔒🧑‍🌾 | Spend summary, status breakdown, most-ordered products, 14-day spend trend — same shape as the wholesaler endpoint, scoped to the shopkeeper's own orders |
 
 ### Reviews
-| Method | Endpoint                      | Description                                    |
-|--------|----------------------------------|----------------------------------------------------|
-| POST   | `/reviews` 🔒🧑‍🌾               | Rate the wholesaler for a `Delivered` order (1–5 stars, one review per order) |
-| GET    | `/reviews/wholesaler/:id` 🔒     | Get a wholesaler's average rating and review list |
-| GET    | `/reviews/order/:orderId` 🔒     | Check whether a specific order already has a review |
+| Method | Endpoint                        | Description                                    |
+|--------|---------------------------------|------------------------------------------------|
+| POST   | `/reviews` 🔒🧑‍🌾              | Rate the wholesaler for a `Delivered` order (1–5 stars, one review per order) |
+| GET    | `/reviews/wholesaler/:id` 🔒    | Get a wholesaler's average rating and review list |
+| GET    | `/reviews/order/:orderId` 🔒    | Check whether a specific order already has a review |
 
 ### Chat
-| Method | Endpoint                | Description                          |
-|--------|----------------------------|----------------------------------------|
-| POST   | `/chat/send` 🔒             | Send a message                       |
-| GET    | `/chat/:userId` 🔒          | Get message history with a user      |
-| GET    | `/chat/contacts/list` 🔒    | List existing conversation contacts  |
-| GET    | `/chat/users/browse` 🔒     | List users available to start a chat |
+| Method | Endpoint                  | Description                         |
+|--------|---------------------------|-------------------------------------|
+| POST   | `/chat/send` 🔒           | Send a message                      |
+| GET    | `/chat/:userId` 🔒        | Get message history with a user     |
+| GET    | `/chat/contacts/list` 🔒  | List existing conversation contacts |
+| GET    | `/chat/users/browse` 🔒   | List users available to start a chat |
 
 ### Profile
-| Method | Endpoint              | Description               |
-|--------|--------------------------|------------------------------|
-| GET    | `/profile` 🔒             | Get current user's profile |
-| PUT    | `/profile` 🔒             | Update profile info        |
-| PUT    | `/profile/password` 🔒    | Change password            |
+| Method | Endpoint               | Description                |
+|--------|------------------------|----------------------------|
+| GET    | `/profile` 🔒          | Get current user's profile |
+| PUT    | `/profile` 🔒          | Update profile info        |
+| PUT    | `/profile/password` 🔒 | Change password            |
 
 ## Data Model
 
@@ -273,10 +300,7 @@ the items via the same release logic as a rejection).
 - [ ] **Smart reorder suggestions for shopkeepers** — track each shopkeeper's past orders per product to learn their typical reorder interval (e.g. rice every ~12 days), then proactively prompt them ("you're due to reorder rice") before they run out, instead of waiting for them to notice and search manually
 - [ ] **Price/demand anomaly detection** — compare a wholesaler's listed price against others in the same category to flag ones that are unusually high or low, and monitor order volume per product to catch sudden spikes (e.g. hoarding ahead of a festival) so wholesalers can react to demand shifts early
 - [ ] **AI assistant over the existing chat infrastructure** — extend `chatRoutes.js`/the `Message` model so shopkeepers can ask natural-language questions ("which wholesalers have onions in stock") and get an answer pulled from the live product catalog, instead of manually browsing or messaging each wholesaler
-<<<<<<< HEAD:Readme.md
-=======
 
 ## License
 
 This project is available for personal and academic use.
->>>>>>> bb3d3035bf8bc227e7116133bce4b938183f5a33:README.md
