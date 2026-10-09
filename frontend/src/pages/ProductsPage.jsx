@@ -10,6 +10,8 @@ import API from '../api';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
 
+const CATEGORIES = ['General', 'Vegetables', 'Fruits', 'Dairy', 'Grains', 'Spices', 'Beverages', 'Snacks'];
+
 const categoryIcon = (cat) => {
   const map = {
     Vegetables: Carrot,
@@ -24,10 +26,34 @@ const categoryIcon = (cat) => {
   return map[cat] || Package;
 };
 
+const categoryColor = (cat) => {
+  const map = {
+    Vegetables: 'bg-green-50 text-green-700 border-green-200',
+    Fruits:     'bg-orange-50 text-orange-700 border-orange-200',
+    Dairy:      'bg-blue-50 text-blue-700 border-blue-200',
+    Grains:     'bg-yellow-50 text-yellow-700 border-yellow-200',
+    Spices:     'bg-red-50 text-red-700 border-red-200',
+    Beverages:  'bg-cyan-50 text-cyan-700 border-cyan-200',
+    Snacks:     'bg-purple-50 text-purple-700 border-purple-200',
+    General:    'bg-slate-50 text-slate-700 border-slate-200',
+  };
+  return map[cat] || 'bg-slate-50 text-slate-700 border-slate-200';
+};
+
 const emptyVariant = () => ({ _key: Math.random().toString(36).slice(2), label: '', price: '', stock: '', minOrderQty: 1 });
 
 // ---- Wholesaler: Add/Edit Product Modal ----
 const ProductModal = ({ product, onClose, onSave }) => {
+  // Split packSize (e.g. "500 gm") back into qty + unit for editing
+  const parsePackSize = (packSize) => {
+    if (!packSize) return { qtyValue: '', qtyUnit: 'gm' };
+    const match = packSize.match(/^(\d+\.?\d*)\s*(.+)$/);
+    if (match) return { qtyValue: match[1], qtyUnit: match[2].trim() };
+    return { qtyValue: packSize, qtyUnit: 'gm' };
+  };
+
+  const parsed = parsePackSize(product?.packSize);
+
   const [form, setForm] = useState({
     name: product?.name || '',
     description: product?.description || '',
@@ -36,8 +62,9 @@ const ProductModal = ({ product, onClose, onSave }) => {
     lowStockThreshold: product?.lowStockThreshold ?? 5,
     minOrderQty: product?.minOrderQty ?? 1,
     unit: product?.unit || 'piece',
-    packSize: product?.packSize || '',
     category: product?.category || 'General',
+    qtyValue: parsed.qtyValue,
+    qtyUnit: parsed.qtyUnit,
   });
   const [variants, setVariants] = useState(
     product?.variants?.length
@@ -61,7 +88,6 @@ const ProductModal = ({ product, onClose, onSave }) => {
     if (!file) return;
     if (!file.type.startsWith('image/')) return setError('Please select an image file');
     if (file.size > 5 * 1024 * 1024) return setError('Image must be smaller than 5MB');
-
     setError('');
     setImageFile(file);
     setImagePreview(URL.createObjectURL(file));
@@ -77,8 +103,12 @@ const ProductModal = ({ product, onClose, onSave }) => {
     setError('');
     setSaving(true);
     try {
+      // Combine qtyValue + qtyUnit into packSize before sending
+      const packSize = form.qtyValue ? `${form.qtyValue} ${form.qtyUnit}` : '';
+
       const data = new FormData();
-      Object.entries(form).forEach(([key, value]) => data.append(key, value));
+      const { qtyValue, qtyUnit, ...rest } = form;
+      Object.entries({ ...rest, packSize }).forEach(([key, value]) => data.append(key, value));
       data.append(
         'variants',
         JSON.stringify(
@@ -133,6 +163,58 @@ const ProductModal = ({ product, onClose, onSave }) => {
               <input type="file" accept="image/*" onChange={handleImageChange} className="text-sm" />
             )}
           </div>
+
+          {/* Quantity: numeric value + unit side by side */}
+          <div>
+            <label className="form-label">Quantity per pack</label>
+            <div className="flex gap-2">
+              <input
+                className="form-input"
+                name="qtyValue"
+                type="number"
+                value={form.qtyValue}
+                onChange={handleChange}
+                placeholder="e.g. 500"
+                min="0"
+              />
+              <select className="form-input w-28 shrink-0" name="qtyUnit" value={form.qtyUnit} onChange={handleChange}>
+                <option value="gm">gm</option>
+                <option value="kg">kg</option>
+                <option value="ml">ml</option>
+                <option value="L">L</option>
+                <option value="piece">piece</option>
+                <option value="dozen">dozen</option>
+                <option value="packet">packet</option>
+                <option value="box">box</option>
+              </select>
+            </div>
+            <p className="mt-1 text-xs text-slate-400">Shown on the product card e.g. "500 gm", "1 kg".</p>
+          </div>
+
+          {/* Unit used for stock/pricing */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="form-label">Stock unit</label>
+              <select className="form-input" name="unit" value={form.unit} onChange={handleChange}>
+                <option value="piece">Piece</option>
+                <option value="kg">Kg</option>
+                <option value="gram">Gram</option>
+                <option value="litre">Litre</option>
+                <option value="ml">ml</option>
+                <option value="dozen">Dozen</option>
+                <option value="packet">Packet</option>
+                <option value="box">Box</option>
+              </select>
+              <p className="mt-1 text-xs text-slate-400">Unit used for stock count and pricing.</p>
+            </div>
+            <div>
+              <label className="form-label">Category</label>
+              <select className="form-input" name="category" value={form.category} onChange={handleChange}>
+                {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="form-label">Price (₹) *</label>
@@ -159,7 +241,7 @@ const ProductModal = ({ product, onClose, onSave }) => {
               <button type="button" className="text-xs font-semibold text-leaf-700" onClick={addVariant}>+ Add size</button>
             </div>
             <p className="mb-2 mt-1 text-xs text-slate-400">
-              List this product in multiple pack sizes (e.g. 250g, 500g, 1kg), each with its own price and stock, instead of the single price/stock above.
+              List this product in multiple pack sizes (e.g. 250g, 500g, 1kg), each with its own price and stock.
             </p>
             {variants.map((v) => (
               <div key={v._key} className="mb-2 grid grid-cols-[1.2fr_1fr_1fr_1fr_auto] gap-2">
@@ -173,39 +255,7 @@ const ProductModal = ({ product, onClose, onSave }) => {
               </div>
             ))}
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="form-label">Unit</label>
-              <select className="form-input" name="unit" value={form.unit} onChange={handleChange}>
-                <option value="piece">Piece</option>
-                <option value="kg">Kg</option>
-                <option value="gram">Gram</option>
-                <option value="litre">Litre</option>
-                <option value="ml">ml</option>
-                <option value="dozen">Dozen</option>
-                <option value="packet">Packet</option>
-                <option value="box">Box</option>
-              </select>
-            </div>
-            <div>
-              <label className="form-label">Category</label>
-              <select className="form-input" name="category" value={form.category} onChange={handleChange}>
-                <option>General</option>
-                <option>Vegetables</option>
-                <option>Fruits</option>
-                <option>Dairy</option>
-                <option>Grains</option>
-                <option>Spices</option>
-                <option>Beverages</option>
-                <option>Snacks</option>
-              </select>
-            </div>
-          </div>
-          <div>
-            <label className="form-label">Quantity (e.g. 100gm, 1kg, 1packet)</label>
-            <input className="form-input" name="packSize" value={form.packSize} onChange={handleChange} placeholder="e.g. 500gm" />
-            <p className="mt-1 text-xs text-slate-400">This is shown on the product card, separate from the unit used for stock/pricing above.</p>
-          </div>
+
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" className="btn-outline" onClick={onClose}>Cancel</button>
             <button type="submit" className="btn-primary" disabled={saving}>
@@ -222,9 +272,6 @@ const ProductModal = ({ product, onClose, onSave }) => {
 const OrderModal = ({ product, onClose }) => {
   const { user } = useAuth();
   const hasVariants = product.variants && product.variants.length > 0;
-  // null = the product's own default price/stock; a number = a specific variant.
-  // Defaulting to null means the base listing is what's shown/selected first,
-  // with variants offered as additional options rather than replacing it.
   const [variantId, setVariantId] = useState(null);
   const selected = variantId ? product.variants.find((v) => v.id === variantId) : product;
 
@@ -235,10 +282,7 @@ const OrderModal = ({ product, onClose }) => {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
 
-  // Reset quantity to the new selection's minimum whenever the chosen variant changes
-  useEffect(() => {
-    setQty(selected?.minOrderQty || 1);
-  }, [variantId]);
+  useEffect(() => { setQty(selected?.minOrderQty || 1); }, [variantId]);
 
   const handleOrder = async () => {
     if (qty < (selected?.minOrderQty || 1)) {
@@ -355,12 +399,76 @@ const OrderModal = ({ product, onClose }) => {
   );
 };
 
+// ---- Product Card ----
+const ProductCard = ({ product, isWholesaler, onEdit, onDelete, onOrder }) => {
+  const CatIcon = categoryIcon(product.category);
+  const hasVariants = product.variants && product.variants.length > 0;
+  const stockUnits = [
+    { stock: product.stock, threshold: product.lowStockThreshold },
+    ...(product.variants || []).map((v) => ({ stock: v.stock, threshold: v.lowStockThreshold })),
+  ];
+  const outOfStock = stockUnits.every((u) => u.stock === 0);
+  const lowStock = !outOfStock && stockUnits.some((u) => u.stock > 0 && u.stock <= u.threshold);
+  const displayPrice = hasVariants
+    ? Math.min(product.price, ...product.variants.map((v) => v.price))
+    : product.price;
+
+  return (
+    <div className="card overflow-hidden !p-0">
+      <div className="relative flex h-36 items-center justify-center bg-leaf-50 text-leaf-500">
+        {product.image ? (
+          <img src={product.image} alt={product.name} className="h-full w-full object-cover" />
+        ) : (
+          <CatIcon size={44} strokeWidth={1.5} />
+        )}
+        <span className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-semibold text-leaf-700 shadow-sm backdrop-blur-sm">
+          <CatIcon size={11} /> {product.category}
+        </span>
+      </div>
+      <div className="p-4">
+        <div className="font-semibold text-slate-900">{product.name}</div>
+        {product.packSize && <div className="text-xs text-slate-400">{product.packSize}</div>}
+        <div className="mt-1 text-base font-bold text-leaf-700">
+          {hasVariants ? `From ₹${displayPrice}` : `₹${displayPrice}`}
+          <span className="text-xs font-normal text-slate-400"> / {product.unit}</span>
+        </div>
+        {isWholesaler && (outOfStock || lowStock) && (
+          <span className={`mt-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${outOfStock ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+            {outOfStock ? 'Out of stock' : 'Low stock'}
+          </span>
+        )}
+        <div className="mt-3 flex gap-2">
+          {isWholesaler ? (
+            <>
+              <button className="btn-outline flex-1 px-3 py-1.5 text-xs" onClick={() => onEdit(product)}>
+                <Pencil size={13} /> Edit
+              </button>
+              <button className="btn-danger flex-1 px-3 py-1.5 text-xs" onClick={() => onDelete(product.id)}>
+                <Trash2 size={13} /> Delete
+              </button>
+            </>
+          ) : (
+            <button
+              className="btn-primary w-full px-3 py-1.5 text-xs"
+              onClick={() => onOrder(product)}
+              disabled={outOfStock}
+            >
+              {outOfStock ? 'Out of Stock' : <><ShoppingCart size={13} /> Order Now</>}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ---- Main Products Page ----
 const ProductsPage = () => {
   const { user } = useAuth();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState(null); // null = category grid view
   const [showAddModal, setShowAddModal] = useState(false);
   const [editProduct, setEditProduct] = useState(null);
   const [orderProduct, setOrderProduct] = useState(null);
@@ -380,10 +488,6 @@ const ProductsPage = () => {
 
   useEffect(() => { fetchProducts(); }, []);
 
-  // Live stock sync: whenever anyone's order changes a product's stock
-  // (placed, rejected, etc.), reflect it here immediately without a reload —
-  // so a shopkeeper never places an order for something that just sold out,
-  // and a wholesaler sees the count tick down in real time.
   useEffect(() => {
     const socket = io(SOCKET_URL);
     socket.on('product_stock_updated', ({ productId, variantId, stock }) => {
@@ -420,20 +524,48 @@ const ProductsPage = () => {
     setEditProduct(null);
   };
 
-  const filtered = products.filter(
+  // Products filtered by search
+  const searchFiltered = products.filter(
     (p) =>
       p.name.toLowerCase().includes(search.toLowerCase()) ||
       p.category?.toLowerCase().includes(search.toLowerCase())
   );
 
+  // Count per category
+  const countByCategory = (cat) => products.filter((p) => p.category === cat).length;
+
+  // Products in selected category (also applying search)
+  const categoryProducts = selectedCategory
+    ? searchFiltered.filter((p) => p.category === selectedCategory)
+    : [];
+
+  // When searching, skip category grid and show all results directly
+  const isSearching = search.trim().length > 0;
+
   return (
     <div className="flex min-h-screen bg-cream-50">
       <Sidebar />
       <div className="flex-1 p-8">
+        {/* Header */}
         <div className="mb-6 flex items-center justify-between">
-          <h1 className="font-display text-2xl font-semibold text-slate-900">
-            {isWholesaler ? 'My Products' : 'Browse Products'}
-          </h1>
+          <div>
+            {selectedCategory && !isSearching ? (
+              <div className="flex items-center gap-2">
+                <button
+                  className="font-display text-2xl font-semibold text-slate-900 hover:text-harvest-600 transition-colors"
+                  onClick={() => setSelectedCategory(null)}
+                >
+                  {isWholesaler ? 'My Products' : 'Browse Products'}
+                </button>
+                <span className="font-display text-2xl font-semibold text-slate-300">/</span>
+                <span className="font-display text-2xl font-semibold text-slate-900">{selectedCategory}</span>
+              </div>
+            ) : (
+              <h1 className="font-display text-2xl font-semibold text-slate-900  hover:text-harvest-600">
+                {isSearching ? 'Search Results' : isWholesaler ? 'My Products' : 'Browse Products'}
+              </h1>
+            )}
+          </div>
           {isWholesaler && (
             <button className="btn-primary" onClick={() => setShowAddModal(true)}>
               <Plus size={16} /> Add Product
@@ -441,88 +573,87 @@ const ProductsPage = () => {
           )}
         </div>
 
-        <div className="relative mb-5 max-w-sm">
+        {/* Search */}
+        <div className="relative mb-6 max-w-sm">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
           <input
             type="text"
             placeholder="Search by name or category..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              if (e.target.value.trim()) setSelectedCategory(null);
+            }}
             className="form-input rounded-full pl-10"
           />
         </div>
 
         {loading ? (
           <p className="text-slate-400">Loading products...</p>
-        ) : filtered.length === 0 ? (
-          <div className="py-16 text-center text-slate-400">
-            <PackageOpen className="mx-auto mb-3" size={44} />
-            <p>{isWholesaler ? 'No products yet. Add your first product!' : 'No products found.'}</p>
-          </div>
+        ) : isSearching ? (
+          // Search results — flat grid
+          searchFiltered.length === 0 ? (
+            <div className="py-16 text-center text-slate-400">
+              <PackageOpen className="mx-auto mb-3" size={44} />
+              <p>No products found for "{search}".</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {searchFiltered.map((product) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  isWholesaler={isWholesaler}
+                  onEdit={setEditProduct}
+                  onDelete={handleDelete}
+                  onOrder={setOrderProduct}
+                />
+              ))}
+            </div>
+          )
+        ) : selectedCategory ? (
+          // Products inside a category
+          categoryProducts.length === 0 ? (
+            <div className="py-16 text-center text-slate-400">
+              <PackageOpen className="mx-auto mb-3" size={44} />
+              <p>{isWholesaler ? 'No products in this category yet.' : 'No products found.'}</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {categoryProducts.map((product) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  isWholesaler={isWholesaler}
+                  onEdit={setEditProduct}
+                  onDelete={handleDelete}
+                  onOrder={setOrderProduct}
+                />
+              ))}
+            </div>
+          )
         ) : (
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filtered.map((product) => {
-              const CatIcon = categoryIcon(product.category);
-              const hasVariants = product.variants && product.variants.length > 0;
-              // The base product is always a sellable option in its own right —
-              // variants are *additional* options, not a replacement for it.
-              const stockUnits = [
-                { stock: product.stock, threshold: product.lowStockThreshold },
-                ...(product.variants || []).map((v) => ({ stock: v.stock, threshold: v.lowStockThreshold })),
-              ];
-              const outOfStock = stockUnits.every((u) => u.stock === 0);
-              const lowStock = !outOfStock && stockUnits.some((u) => u.stock > 0 && u.stock <= u.threshold);
-              const displayPrice = hasVariants
-                ? Math.min(product.price, ...product.variants.map((v) => v.price))
-                : product.price;
+          // Category grid
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            {CATEGORIES.map((cat) => {
+              const CatIcon = categoryIcon(cat);
+              const count = countByCategory(cat);
+              // For wholesaler show all categories; for shopkeeper hide empty ones
+              if (!isWholesaler && count === 0) return null;
               return (
-                <div className="card overflow-hidden !p-0" key={product.id}>
-                  <div className="relative flex h-36 items-center justify-center bg-leaf-50 text-leaf-500">
-                    {product.image ? (
-                      <img src={product.image} alt={product.name} className="h-full w-full object-cover" />
-                    ) : (
-                      <CatIcon size={44} strokeWidth={1.5} />
-                    )}
-                    <span className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-semibold text-leaf-700 shadow-sm backdrop-blur-sm">
-                      <CatIcon size={11} /> {product.category}
-                    </span>
-                  </div>
-                  <div className="p-4">
-                    <div className="font-semibold text-slate-900">{product.name}</div>
-                    {product.packSize && (
-                      <div className="text-xs text-slate-400">{product.packSize}</div>
-                    )}
-                    <div className="mt-1 text-base font-bold text-leaf-700">
-                      {hasVariants ? `From ₹${displayPrice}` : `₹${displayPrice}`}
-                      <span className="text-xs font-normal text-slate-400"> / {product.unit}</span>
-                    </div>
-                    {isWholesaler && (outOfStock || lowStock) && (
-                      <span className={`mt-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${outOfStock ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
-                        {outOfStock ? 'Out of stock' : 'Low stock'}
-                      </span>
-                    )}
-                    <div className="mt-3 flex gap-2">
-                      {isWholesaler ? (
-                        <>
-                          <button className="btn-outline flex-1 px-3 py-1.5 text-xs" onClick={() => setEditProduct(product)}>
-                            <Pencil size={13} /> Edit
-                          </button>
-                          <button className="btn-danger flex-1 px-3 py-1.5 text-xs" onClick={() => handleDelete(product.id)}>
-                            <Trash2 size={13} /> Delete
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          className="btn-primary w-full px-3 py-1.5 text-xs"
-                          onClick={() => setOrderProduct(product)}
-                          disabled={outOfStock}
-                        >
-                          {outOfStock ? 'Out of Stock' : (<><ShoppingCart size={13} /> Order Now</>)}
-                        </button>
-                      )}
+                <button
+                  key={cat}
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`card flex flex-col items-center justify-center gap-3 py-8 border transition hover:shadow-md hover:-translate-y-0.5 ${categoryColor(cat)}`}
+                >
+                  <CatIcon size={36} strokeWidth={1.5} />
+                  <div className="text-center">
+                    <div className="font-semibold text-sm">{cat}</div>
+                    <div className="text-xs opacity-60 mt-0.5">
+                      {count} {count === 1 ? 'product' : 'products'}
                     </div>
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
