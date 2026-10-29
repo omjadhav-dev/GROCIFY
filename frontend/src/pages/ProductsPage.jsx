@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 import { useAuth } from '../context/AuthContext';
+import { useCart } from '../context/CartContext';
 import API from '../api';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
@@ -26,6 +27,34 @@ const categoryIcon = (cat) => {
   return map[cat] || Package;
 };
 
+const categoryImage = (cat) => {
+  const map = {
+    Vegetables: '/categories/vegetables.png',
+    Fruits:     '/categories/fruits.png',
+    Dairy:      '/categories/dairy.png',
+    Grains:     '/categories/grains.png',
+    Spices:     '/categories/spices.png',
+    Beverages:  '/categories/beverages.png',
+    Snacks:     '/categories/snacks.png',
+    General:    '/categories/general.png',
+  };
+  return map[cat] || '/categories/general.png';
+};
+
+const categoryBannerColor = (cat) => {
+  const map = {
+    Vegetables: 'bg-green-600',
+    Fruits:     'bg-amber-600',
+    Dairy:      'bg-blue-600',
+    Grains:     'bg-yellow-700',
+    Spices:     'bg-red-600',
+    Beverages:  'bg-teal-600',
+    Snacks:     'bg-purple-700',
+    General:    'bg-orange-700',
+  };
+  return map[cat] || 'bg-slate-700';
+};
+
 const categoryColor = (cat) => {
   const map = {
     Vegetables: 'bg-green-50 text-green-700 border-green-200',
@@ -40,7 +69,7 @@ const categoryColor = (cat) => {
   return map[cat] || 'bg-slate-50 text-slate-700 border-slate-200';
 };
 
-const emptyVariant = () => ({ _key: Math.random().toString(36).slice(2), label: '', price: '', stock: '', minOrderQty: 1 });
+const emptyVariant = () => ({ _key: Math.random().toString(36).slice(2), label: '', price: '', stock: '', minOrderQty: 1, qtyValue: '', qtyUnit: 'gm' });
 
 // ---- Wholesaler: Add/Edit Product Modal ----
 const ProductModal = ({ product, onClose, onSave }) => {
@@ -68,7 +97,18 @@ const ProductModal = ({ product, onClose, onSave }) => {
   });
   const [variants, setVariants] = useState(
     product?.variants?.length
-      ? product.variants.map((v) => ({ _key: v.id, label: v.label, price: v.price, stock: v.stock, minOrderQty: v.minOrderQty }))
+      ? product.variants.map((v) => {
+          const match = (v.description || '').match(/^(\d+\.?\d*)\s*(.+)$/);
+          return {
+            _key: v.id,
+            label: v.label,
+            price: v.price,
+            stock: v.stock,
+            minOrderQty: v.minOrderQty,
+            qtyValue: match ? match[1] : '',
+            qtyUnit: match ? match[2].trim() : 'gm',
+          };
+        })
       : []
   );
   const [imageFile, setImageFile] = useState(null);
@@ -114,7 +154,13 @@ const ProductModal = ({ product, onClose, onSave }) => {
         JSON.stringify(
           variants
             .filter((v) => v.label.trim() && v.price !== '')
-            .map(({ label, price, stock, minOrderQty }) => ({ label: label.trim(), price, stock, minOrderQty }))
+            .map(({ label, price, stock, minOrderQty, qtyValue, qtyUnit }) => ({
+              label: label.trim(),
+              price,
+              stock,
+              minOrderQty,
+              description: qtyValue ? `${qtyValue} ${qtyUnit}` : '',
+            }))
         )
       );
       if (imageFile) {
@@ -162,6 +208,17 @@ const ProductModal = ({ product, onClose, onSave }) => {
             ) : (
               <input type="file" accept="image/*" onChange={handleImageChange} className="text-sm" />
             )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="form-label">Price (₹) *</label>
+              <input className="form-input" name="price" type="number" value={form.price} onChange={handleChange} placeholder="0" min="0" required />
+            </div>
+            <div>
+              <label className="form-label">Stock *</label>
+              <input className="form-input" name="stock" type="number" value={form.stock} onChange={handleChange} placeholder="0" min="0" required />
+            </div>
           </div>
 
           {/* Quantity: numeric value + unit side by side */}
@@ -214,17 +271,6 @@ const ProductModal = ({ product, onClose, onSave }) => {
               </select>
             </div>
           </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="form-label">Price (₹) *</label>
-              <input className="form-input" name="price" type="number" value={form.price} onChange={handleChange} placeholder="0" min="0" required />
-            </div>
-            <div>
-              <label className="form-label">Stock *</label>
-              <input className="form-input" name="stock" type="number" value={form.stock} onChange={handleChange} placeholder="0" min="0" required />
-            </div>
-          </div>
           <div>
             <label className="form-label">Low stock alert threshold</label>
             <input className="form-input" name="lowStockThreshold" type="number" value={form.lowStockThreshold} onChange={handleChange} placeholder="5" min="0" />
@@ -244,14 +290,58 @@ const ProductModal = ({ product, onClose, onSave }) => {
               List this product in multiple pack sizes (e.g. 250g, 500g, 1kg), each with its own price and stock.
             </p>
             {variants.map((v) => (
-              <div key={v._key} className="mb-2 grid grid-cols-[1.2fr_1fr_1fr_1fr_auto] gap-2">
-                <input className="form-input" placeholder="Label (e.g. 500g)" value={v.label} onChange={(e) => updateVariant(v._key, 'label', e.target.value)} />
-                <input className="form-input" type="number" placeholder="Price" min="0" value={v.price} onChange={(e) => updateVariant(v._key, 'price', e.target.value)} />
-                <input className="form-input" type="number" placeholder="Stock" min="0" value={v.stock} onChange={(e) => updateVariant(v._key, 'stock', e.target.value)} />
-                <input className="form-input" type="number" placeholder="Min qty" min="1" value={v.minOrderQty} onChange={(e) => updateVariant(v._key, 'minOrderQty', e.target.value)} />
-                <button type="button" className="text-slate-400 hover:text-red-600" onClick={() => removeVariant(v._key)}>
-                  <X size={16} />
-                </button>
+              <div key={v._key} className="mb-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-semibold text-slate-500">Pack / Size variant</span>
+                  <button type="button" className="text-slate-300 hover:text-red-500" onClick={() => removeVariant(v._key)}>
+                    <X size={15} />
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Label *</label>
+                    <input className="form-input" placeholder="e.g. 500g, 1kg" value={v.label} onChange={(e) => updateVariant(v._key, 'label', e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Price (₹) *</label>
+                    <input className="form-input" type="number" placeholder="0" min="0" value={v.price} onChange={(e) => updateVariant(v._key, 'price', e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Stock *</label>
+                    <input className="form-input" type="number" placeholder="0" min="0" value={v.stock} onChange={(e) => updateVariant(v._key, 'stock', e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Min order qty</label>
+                    <input className="form-input" type="number" placeholder="1" min="1" value={v.minOrderQty} onChange={(e) => updateVariant(v._key, 'minOrderQty', e.target.value)} />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Pack Quantity</label>
+                  <div className="flex gap-2">
+                    <input
+                      className="form-input"
+                      type="number"
+                      placeholder="e.g. 100"
+                      min="0"
+                      value={v.qtyValue}
+                      onChange={(e) => updateVariant(v._key, 'qtyValue', e.target.value)}
+                    />
+                    <select
+                      className="form-input w-24 shrink-0"
+                      value={v.qtyUnit}
+                      onChange={(e) => updateVariant(v._key, 'qtyUnit', e.target.value)}
+                    >
+                      <option value="gm">gm</option>
+                      <option value="kg">kg</option>
+                      <option value="ml">ml</option>
+                      <option value="L">L</option>
+                      <option value="piece">piece</option>
+                      <option value="dozen">dozen</option>
+                      <option value="packet">packet</option>
+                      <option value="box">box</option>
+                    </select>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
@@ -399,8 +489,110 @@ const OrderModal = ({ product, onClose }) => {
   );
 };
 
+// ---- Variant Picker Modal ----
+const VariantPickerModal = ({ product, onClose }) => {
+  const { addToCart } = useCart();
+  const hasVariants = product.variants && product.variants.length > 0;
+  const [selectedVariantId, setSelectedVariantId] = useState(null);
+  const [added, setAdded] = useState(false);
+
+  const selected = selectedVariantId
+    ? product.variants.find((v) => v.id === selectedVariantId)
+    : null;
+
+  const price = selected ? selected.price : product.price;
+  const stock = selected ? selected.stock : product.stock;
+  const outOfStock = stock === 0;
+  const displayPackSize = selected?.description || product.packSize || '';
+
+  const handleAdd = () => {
+    addToCart(product, selectedVariantId);
+    setAdded(true);
+    setTimeout(() => onClose(), 800);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 backdrop-blur-sm p-4 sm:items-center">
+      <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl animate-in slide-in-from-bottom-4">
+        {/* Product info */}
+        <div className="flex items-center gap-3 mb-4">
+          {product.image ? (
+            <img src={product.image} alt={product.name} className="h-14 w-14 rounded-xl object-cover border border-slate-100" />
+          ) : (
+            <div className="h-14 w-14 rounded-xl bg-leaf-50 flex items-center justify-center text-leaf-400 font-bold text-lg">
+              {product.name.charAt(0)}
+            </div>
+          )}
+          <div>
+            <div className="font-semibold text-slate-900">{product.name}</div>
+            {displayPackSize && <div className="text-xs text-slate-400">{displayPackSize}</div>}
+            <div className="text-sm font-bold text-harvest-600 mt-0.5">₹{price} / {product.unit}</div>
+          </div>
+          <button onClick={onClose} className="ml-auto text-slate-300 hover:text-slate-600">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Variant chips */}
+        {hasVariants && (
+          <div className="mb-4">
+            <p className="text-xs font-semibold text-slate-500 mb-2">SELECT SIZE</p>
+            <div className="flex flex-wrap gap-2">
+              {/* Default option */}
+              <button
+                onClick={() => setSelectedVariantId(null)}
+                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${
+                  selectedVariantId === null
+                    ? 'border-harvest-500 bg-harvest-50 text-harvest-700'
+                    : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                } ${product.stock === 0 ? 'opacity-40 cursor-not-allowed' : ''}`}
+                disabled={product.stock === 0}
+              >
+                Default — ₹{product.price}
+                {product.stock === 0 && ' (out of stock)'}
+              </button>
+              {product.variants.map((v) => (
+                <button
+                  key={v.id}
+                  onClick={() => setSelectedVariantId(v.id)}
+                  disabled={v.stock === 0}
+                  className={`flex flex-col items-start rounded-xl border px-3 py-2 text-left text-xs font-semibold transition-all ${
+                    selectedVariantId === v.id
+                      ? 'border-harvest-500 bg-harvest-50 text-harvest-700'
+                      : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                  } ${v.stock === 0 ? 'opacity-40 cursor-not-allowed' : ''}`}
+                >
+                  <span>{v.label} — ₹{v.price}{v.stock === 0 ? ' (out of stock)' : ''}</span>
+                  {v.description && (
+                    <span className="mt-0.5 text-[10px] font-normal text-slate-400">📦 {v.description}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <button
+          className="btn-primary w-full"
+          onClick={handleAdd}
+          disabled={outOfStock || added}
+        >
+          {added ? (
+            <><CheckCircle2 size={15} /> Added to Cart!</>
+          ) : outOfStock ? (
+            'Out of Stock'
+          ) : (
+            <><ShoppingCart size={15} /> Add to Cart — ₹{price}</>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // ---- Product Card ----
-const ProductCard = ({ product, isWholesaler, onEdit, onDelete, onOrder }) => {
+const ProductCard = ({ product, isWholesaler, onEdit, onDelete }) => {
+  const [showPicker, setShowPicker] = useState(false);
   const CatIcon = categoryIcon(product.category);
   const hasVariants = product.variants && product.variants.length > 0;
   const stockUnits = [
@@ -450,14 +642,15 @@ const ProductCard = ({ product, isWholesaler, onEdit, onDelete, onOrder }) => {
           ) : (
             <button
               className="btn-primary w-full px-3 py-1.5 text-xs"
-              onClick={() => onOrder(product)}
+              onClick={() => setShowPicker(true)}
               disabled={outOfStock}
             >
-              {outOfStock ? 'Out of Stock' : <><ShoppingCart size={13} /> Order Now</>}
+              {outOfStock ? 'Out of Stock' : <><ShoppingCart size={13} /> Add to Cart</>}
             </button>
           )}
         </div>
       </div>
+      {showPicker && <VariantPickerModal product={product} onClose={() => setShowPicker(false)} />}
     </div>
   );
 };
@@ -471,7 +664,6 @@ const ProductsPage = () => {
   const [selectedCategory, setSelectedCategory] = useState(null); // null = category grid view
   const [showAddModal, setShowAddModal] = useState(false);
   const [editProduct, setEditProduct] = useState(null);
-  const [orderProduct, setOrderProduct] = useState(null);
 
   const isWholesaler = user.type === 'wholesaler';
 
@@ -552,7 +744,7 @@ const ProductsPage = () => {
             {selectedCategory && !isSearching ? (
               <div className="flex items-center gap-2">
                 <button
-                  className="font-display text-2xl font-semibold text-slate-900 hover:text-harvest-600 transition-colors"
+                  className="font-display text-2xl font-semibold text-harvest-600 hover:text-slate-400 transition-colors"
                   onClick={() => setSelectedCategory(null)}
                 >
                   {isWholesaler ? 'My Products' : 'Browse Products'}
@@ -561,7 +753,7 @@ const ProductsPage = () => {
                 <span className="font-display text-2xl font-semibold text-slate-900">{selectedCategory}</span>
               </div>
             ) : (
-              <h1 className="font-display text-2xl font-semibold text-slate-900  hover:text-harvest-600">
+              <h1 className="font-display text-2xl font-semibold text-slate-900">
                 {isSearching ? 'Search Results' : isWholesaler ? 'My Products' : 'Browse Products'}
               </h1>
             )}
@@ -606,7 +798,6 @@ const ProductsPage = () => {
                   isWholesaler={isWholesaler}
                   onEdit={setEditProduct}
                   onDelete={handleDelete}
-                  onOrder={setOrderProduct}
                 />
               ))}
             </div>
@@ -627,7 +818,6 @@ const ProductsPage = () => {
                   isWholesaler={isWholesaler}
                   onEdit={setEditProduct}
                   onDelete={handleDelete}
-                  onOrder={setOrderProduct}
                 />
               ))}
             </div>
@@ -636,21 +826,33 @@ const ProductsPage = () => {
           // Category grid
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {CATEGORIES.map((cat) => {
-              const CatIcon = categoryIcon(cat);
               const count = countByCategory(cat);
-              // For wholesaler show all categories; for shopkeeper hide empty ones
-              if (!isWholesaler && count === 0) return null;
+              const bannerColor = categoryBannerColor(cat);
               return (
                 <button
                   key={cat}
                   onClick={() => setSelectedCategory(cat)}
-                  className={`card flex flex-col items-center justify-center gap-3 py-8 border transition hover:shadow-md hover:-translate-y-0.5 ${categoryColor(cat)}`}
+                  className="group overflow-hidden rounded-2xl shadow-sm hover:shadow-lg transition-all hover:-translate-y-0.5 flex flex-col"
                 >
-                  <CatIcon size={36} strokeWidth={1.5} />
-                  <div className="text-center">
-                    <div className="font-semibold text-sm">{cat}</div>
-                    <div className="text-xs opacity-60 mt-0.5">
-                      {count} {count === 1 ? 'product' : 'products'}
+                  {/* Food image — top 70% */}
+                  <div className="relative h-32 w-full overflow-hidden">
+                    <img
+                      src={categoryImage(cat)}
+                      alt={cat}
+                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    />
+                  </div>
+
+                  {/* Colored banner — bottom */}
+                  <div className={`flex items-center justify-between px-3 py-2.5 ${bannerColor}`}>
+                    <div className="text-left">
+                      <div className="font-bold text-sm text-white leading-tight">{cat}</div>
+                      <div className="text-[11px] text-white/80 mt-0.5">
+                        {count} {count === 1 ? 'product' : 'products'}
+                      </div>
+                    </div>
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/20 text-white text-xs font-bold">
+                      ›
                     </div>
                   </div>
                 </button>
@@ -667,7 +869,6 @@ const ProductsPage = () => {
           onSave={handleSave}
         />
       )}
-      {orderProduct && <OrderModal product={orderProduct} onClose={() => setOrderProduct(null)} />}
     </div>
   );
 };
